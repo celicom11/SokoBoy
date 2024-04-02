@@ -1,0 +1,446 @@
+#include "StdAfx.h"
+#include "Sokoban.h"
+#include "ReverseStages.h"
+#include "Hungarian1616.h"
+#include "StageQueue.h"
+
+namespace { //static helpers
+	void _CheckAddStage(IN OUT Stage& temp, IN OUT deque<Stage>& dqOpened, const vector<Stage>& vClosed, uint32_t nPIdx) {
+		if (std::find(dqOpened.begin(), dqOpened.end(), temp) == dqOpened.end() &&
+			std::find(vClosed.begin(), vClosed.end(), temp) == vClosed.end()) {
+			temp.nPIdx = nPIdx;
+			dqOpened.push_back(temp);
+		}
+	}
+	uint32_t _Depth(const Stage& stage, const vector<Stage>& vClosed) {
+		uint32_t nRet = 0;
+		const Stage* pStage = &stage;
+		while (pStage && pStage->nPIdx) {
+			pStage = &vClosed[pStage->nPIdx - 1];
+			++nRet;
+		}
+		return nRet;
+	}
+#define BOX_TOP	0x01
+#define BOX_BTM	0x02
+#define BOX_LT	0x04
+#define BOX_RT	0x08
+	int _BoxEdges(Point ptBox, const vector<Point>& vCells) {
+		int nRet = 0;
+		for (Point ptCell : vCells) {
+			if (ptCell.nRow + 1 == ptBox.nRow && ptCell.nCol == ptBox.nCol)
+				nRet |= BOX_TOP;
+			else if (ptCell.nRow - 1 == ptBox.nRow && ptCell.nCol == ptBox.nCol)
+				nRet |= BOX_BTM;
+			else if (ptCell.nRow == ptBox.nRow && ptCell.nCol+1 == ptBox.nCol)
+				nRet |= BOX_LT;
+			else if (ptCell.nRow == ptBox.nRow && ptCell.nCol-1 == ptBox.nCol)
+				nRet |= BOX_RT;
+		}
+		return nRet;
+	}
+};
+bool CRStages::CanPullUp_(const Stage& stage) const {
+	return stage.ptR.nRow > 1 && m_Sokoban.IsSpace(stage.ptR.nRow - 1, stage.ptR.nCol) &&
+		m_Sokoban.HasBox(stage, stage.ptR.nRow + 1, stage.ptR.nCol) && !m_Sokoban.HasBox(stage, stage.ptR.nRow - 1, stage.ptR.nCol);
+}
+bool CRStages::CanPullDown_(const Stage& stage) const {
+	return m_Sokoban.IsSpace(stage.ptR.nRow + 1, stage.ptR.nCol) &&
+		m_Sokoban.HasBox(stage, stage.ptR.nRow - 1, stage.ptR.nCol) && !m_Sokoban.HasBox(stage, stage.ptR.nRow + 1, stage.ptR.nCol);
+}
+bool CRStages::CanPullLeft_(const Stage& stage) const {
+	return stage.ptR.nCol > 1 && m_Sokoban.IsSpace(stage.ptR.nRow, stage.ptR.nCol-1) &&
+		m_Sokoban.HasBox(stage, stage.ptR.nRow, stage.ptR.nCol+1) && !m_Sokoban.HasBox(stage, stage.ptR.nRow, stage.ptR.nCol-1);
+}
+bool CRStages::CanPullRight_(const Stage& stage) const {
+	return m_Sokoban.IsSpace(stage.ptR.nRow, stage.ptR.nCol + 1) &&
+		m_Sokoban.HasBox(stage, stage.ptR.nRow, stage.ptR.nCol - 1) && !m_Sokoban.HasBox(stage, stage.ptR.nRow, stage.ptR.nCol + 1);
+}
+Stage CRStages::PullUp_(const Stage& stage) const {
+	Stage ret = stage; 
+	m_Sokoban.SetBox(ret.ptR.nRow, ret.ptR.nCol, true, ret);
+	m_Sokoban.SetBox(ret.ptR.nRow + 1, ret.ptR.nCol, false, ret);
+	--ret.ptR.nRow;
+	return ret;
+}
+Stage CRStages::PullDown_(const Stage& stage) const {
+	Stage ret = stage;
+	m_Sokoban.SetBox(ret.ptR.nRow, ret.ptR.nCol, true, ret);
+	m_Sokoban.SetBox(ret.ptR.nRow - 1, ret.ptR.nCol, false, ret);
+	++ret.ptR.nRow;
+	return ret;
+}
+Stage CRStages::PullLeft_(const Stage& stage) const {
+	Stage ret = stage;
+	m_Sokoban.SetBox(ret.ptR.nRow, ret.ptR.nCol, true, ret);
+	m_Sokoban.SetBox(ret.ptR.nRow, ret.ptR.nCol + 1, false, ret);
+	--ret.ptR.nCol;
+	return ret;
+}
+Stage CRStages::PullRight_(const Stage& stage) const {
+	Stage ret = stage;
+	m_Sokoban.SetBox(ret.ptR.nRow, ret.ptR.nCol, true, ret);
+	m_Sokoban.SetBox(ret.ptR.nRow, ret.ptR.nCol - 1, false, ret);
+	++ret.ptR.nCol;
+	return ret;
+}
+void CRStages::GetReachableCells_(const Stage& stage, OUT vector<Point>& vCells) const {
+	vCells.clear();
+	Stage temp, current = stage;
+	bitset<256> bst;//16x16 bit matrix
+	queue<Stage> queueStages;//BFS
+
+	//prolog
+	bst.set(stage.ptR.nRow * m_Sokoban.Dim().nCols + stage.ptR.nCol);//current robot pos
+	vCells.push_back(stage.ptR);
+	while (1) {
+		//UP
+		if (m_Sokoban.CanWalkUp(current)) {
+			temp = m_Sokoban.WalkUp(current);
+			if (!bst.test(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol)) {
+				bst.set(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol);		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+		//LT
+		if (m_Sokoban.CanWalkLeft(current)) {
+			temp = m_Sokoban.WalkLeft(current);
+			if (!bst.test(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol)) {
+				bst.set(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol);		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+		//DN
+		if (m_Sokoban.CanWalkDown(current)) {
+			temp = m_Sokoban.WalkDown(current);
+			if (!bst.test(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol)) {
+				bst.set(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol);		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+		//RT
+		if (m_Sokoban.CanWalkRight(current)) {
+			temp = m_Sokoban.WalkRight(current);
+			if (!bst.test(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol)) {
+				bst.set(temp.ptR.nRow * m_Sokoban.Dim().nCols + temp.ptR.nCol);		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+
+		if (queueStages.empty())
+			break; //done
+		current = queueStages.front();
+		queueStages.pop();
+	}//while
+}
+
+uint16_t CRStages::GetMinDist(const Stage& stage) const {
+	uint16_t nRet = 0xFFFF;//inf
+	for (const RStageNode& rsn : m_vRSNodes) {
+		uint16_t nDist = LBDist_(rsn, stage);
+		if (nRet > nDist)
+			nRet = nDist;
+	}
+	return nRet;
+}
+bool CRStages::HasStage_(const RStageNode& rsnode, const Stage& stage) const {
+	if(rsnode.stage.llBoxPos != stage.llBoxPos)
+		return false;
+	//check robots Corral!
+	int64_t llRPos = 1ll << m_Sokoban.CellPos(stage.ptR);
+	uint8_t aBoxesPos[16]{ 0 };//0..63
+	rsnode.stage.GetBoxesPos(aBoxesPos);
+	for (int nBox = 0; nBox < m_Sokoban.BoxCount(); ++nBox) {
+		const DistExt& dstex = rsnode.aDistExt[nBox][aBoxesPos[nBox]];
+		if (dstex.aCellPos[0] & llRPos) {
+			assert(dstex.aPulls[0] == 0);
+			return true;
+		}
+		if (dstex.aCellPos[1] & llRPos) { //could be in the 2nd corral!
+			//assert(dstex.aPulls[1] == 0);
+			return true;
+		}
+		if (dstex.aCellPos[2] & llRPos) { //could be in the 3rd corral!
+			//assert(dstex.aPulls[2] == 0);
+			return true;
+		}
+	}
+	return false;
+}
+bool CRStages::CompletePath(IN OUT Stage& current, IN OUT IStageQueue* pSQClosed) const {
+	//1. find RStageNode with our closed Stage
+	for (const RStageNode& rsn : m_vRSNodes) {
+		if (HasStage_(rsn, current)) {
+			//we have found the point/Stage on the radius - lets build the path to center
+			pSQClosed->Push(current);
+			Stage rsnStage = rsn.stage, temp;
+			do {
+				rsnStage = m_vClosedStages[rsnStage.nPIdx - 1]; //rsn parent
+				temp = rsnStage; temp.nPIdx = pSQClosed->Size();//1 based!
+				pSQClosed->Push(temp);
+			} while (rsnStage.nPIdx);
+			current = temp;
+			return true;
+		}
+	}
+	assert(0);
+	return false;//snbh?
+}
+//following ideas from https://www.researchgate.net/publication/2305703_Pushing_the_Limits_New_Developments_in_Single-Agent_Search . 4.3. Lower Bound Heuristic
+uint16_t CRStages::LBDist_(const RStageNode& rsnode, const Stage& stage) const {
+	uint8_t aDisMatrix[16][16]; //dist matrix
+	memset(aDisMatrix, 0xFF, 16*16);
+	//
+	const uint16_t nBoxes = m_Sokoban.BoxCount();
+	const int64_t llRPos = 1ll << m_Sokoban.CellPos(stage.ptR);
+	uint8_t aStgBoxesPos[16]{ 0 };//0..63
+	stage.GetBoxesPos(aStgBoxesPos);
+
+	for (uint8_t nRStgBox = 0; nRStgBox < nBoxes; ++nRStgBox) {
+		bool bHasPath = false;
+		for (uint8_t nStgBox = 0; nStgBox < nBoxes; ++nStgBox) {
+			uint8_t nStgBoxesPos = aStgBoxesPos[nStgBox];
+			const DistExt& dstex = rsnode.aDistExt[nRStgBox][nStgBoxesPos];
+			for (int nCIdx = 0; nCIdx < _countof(dstex.aCellPos); ++nCIdx) {
+				if (dstex.aCellPos[nCIdx] & llRPos) {
+					aDisMatrix[nRStgBox][nStgBox] = dstex.aPulls[nCIdx];
+					bHasPath = true;
+					break;
+				}
+			}
+		}
+		if (!bHasPath)
+			return 0xFFFF;
+	}
+	for (uint8_t nStgBox = 0; nStgBox < nBoxes; ++nStgBox) {
+		bool bHasPath = false;
+		for (uint8_t nRStgBox = 0; nRStgBox < nBoxes; ++nRStgBox) {
+			if (aDisMatrix[nRStgBox][nStgBox] < 255) {
+				bHasPath = true;
+				break;
+			}
+		}
+		if (!bHasPath)
+			return 0xFFFF;
+	}
+
+	return Hungarian::Min1616(nBoxes, nBoxes, aDisMatrix);
+}
+
+bool CRStages::Init(uint16_t nDepth) {
+	//1. BFS for reverse agent up to Depth=10
+	Stage temp; temp.llBoxPos = m_Sokoban.FinalBoxPos();
+	m_vClosedStages.clear();
+	deque<Stage> queueStages;//BFS
+	vector<Point> vCells;
+	uint32_t nPIdx = 1;
+	//PROLOG
+	//we need to add starting Stages from all corrals/rooms of the final pos!
+	bitset<16 * 16> btsCells; //unattended free cells
+	for (uint8_t nRow = 0; nRow < m_Sokoban.Dim().nRows; ++nRow) {
+		for (uint8_t nCol = 0; nCol < m_Sokoban.Dim().nCols; ++nCol) {
+			if (btsCells.test(nRow * m_Sokoban.Dim().nCols + nCol) || m_Sokoban.NotSpace(temp, nRow, nCol))
+				continue;
+			temp.ptR = { nRow , nCol};
+			GetReachableCells_(temp, vCells);
+			for (Point ptCell : vCells) {
+				btsCells.set(ptCell.nRow * m_Sokoban.Dim().nCols + ptCell.nCol);
+			}
+			queueStages.push_back(temp);
+		}
+	}
+	Stage current = queueStages.back(); queueStages.pop_back();//or front -does not matter!
+	m_vClosedStages.push_back(current);
+	//MAIN LOOP
+	while (1) {
+		//recalc reachable cells
+		GetReachableCells_(current, vCells);
+		for (Point ptR : vCells) {
+			//UP
+			temp = current; temp.ptR = ptR;
+			if (CanPullUp_(temp)) {
+				temp = PullUp_(temp);
+				_CheckAddStage(temp, queueStages, m_vClosedStages, nPIdx);
+				temp = current; temp.ptR = ptR; //restore temp stage
+			}
+			//LEFT
+			if (CanPullLeft_(temp)) {
+				temp = PullLeft_(temp);
+				_CheckAddStage(temp, queueStages, m_vClosedStages, nPIdx);
+				temp = current; temp.ptR = ptR; //restore temp stage
+			}
+			//DN
+			if (CanPullDown_(temp)) {
+				temp = PullDown_(temp);
+				_CheckAddStage(temp, queueStages, m_vClosedStages, nPIdx);
+				temp = current; temp.ptR = ptR; //restore temp stage
+			}
+			//RIGHT
+			if (CanPullRight_(temp)) {
+				temp = PullRight_(temp);
+				_CheckAddStage(temp, queueStages, m_vClosedStages, nPIdx);
+			}
+		}
+		if (queueStages.empty())
+			return false;						//could not reach the depth?
+		current = queueStages.front();
+		if (_Depth(current, m_vClosedStages) > nDepth)
+			break;//done
+		queueStages.pop_front();	//BFS wants FIFO
+		m_vClosedStages.push_back(current); //NOTE: pre-emptive closing
+		nPIdx = (uint32_t)m_vClosedStages.size();//1 based!
+	}//while
+
+	//2. Calc Corral0+Dist map for each RSNode
+	for (auto itrS = m_vClosedStages.rbegin(); itrS != m_vClosedStages.rend(); ++itrS) {
+		const Stage& stage = *itrS;
+		if (_Depth(stage, m_vClosedStages) < nDepth)
+			break;
+		m_vRSNodes.emplace_back(stage);
+		InitRSNode_(m_vRSNodes.back());
+	}
+	return true;
+}
+void CRStages::InitRSNode_(IN OUT RStageNode& rsnode) const {
+	uint8_t aBoxesPos[16]{ 0 };//0..63
+	rsnode.stage.GetBoxesPos(aBoxesPos);
+	const uint16_t nBoxes = m_Sokoban.BoxCount();
+	for (uint8_t nBox = 0; nBox < nBoxes; ++nBox) {
+		Point ptBox = m_Sokoban.CellPoint(aBoxesPos[nBox] + 1);
+		assert(m_Sokoban.HasBox(rsnode.stage, ptBox.nRow, ptBox.nCol));
+		CalcBoxDistEx_(rsnode.stage, ptBox, rsnode.aDistExt[nBox]);
+	}
+	//2nd pass:
+	// Testing showed, that measuring the distance from the specific box to any cell while fixing all other boxes is TOO restrictive :
+	// most of the stages would have an INF distance to a given one. 
+	// After measuring the "strict distances" we "re-measure" the distances to the unreachable cells with a small penalty by "removing" one reachable+pushable box.
+	// Understandebly, this is not a strict "Lower-Bound" pull-distance from the free cell to a box, but something heuristically close to a real one...
+	if (m_Sokoban.Cfg().nRSM_GBRelax == 1) { //2 is not impl: todo!
+		for (uint8_t nBox = 0; nBox < nBoxes; ++nBox) {
+			Point ptBox = m_Sokoban.CellPoint(aBoxesPos[nBox] + 1);
+			for (uint8_t nRBox = 0; nRBox < nBoxes; ++nRBox) {
+				if (nRBox == nBox || !IsBoxPushable_(rsnode, nRBox, aBoxesPos[nRBox]))
+					continue; //not directly removable...
+				Stage temp = rsnode.stage;
+				//assert(temp.llBoxPos & (1ll << aBoxesPos[nRBox]));
+				temp.llBoxPos ^= (1ll << aBoxesPos[nRBox]); //remove box
+				//update distances for unreachable cells (ONLY)
+				DistExt aDistExt[64];
+				CalcBoxDistEx_(temp, ptBox, aDistExt);
+				for (uint8_t nCell = 0; nCell < m_Sokoban.FreeCells(); ++nCell) {
+					DistExt& dex = rsnode.aDistExt[nBox][nCell];
+					if (!dex.aCellPos[0] && aDistExt[nCell].aCellPos[0]) {
+						dex.aCellPos[0] = aDistExt[nCell].aCellPos[0];
+						dex.aPulls[0] = aDistExt[nCell].aPulls[0] + 4;//penalty
+					}
+					if (!dex.aCellPos[1] && aDistExt[nCell].aCellPos[1]) {
+						dex.aCellPos[1] = aDistExt[nCell].aCellPos[1];
+						dex.aPulls[1] = aDistExt[nCell].aPulls[1] + 4;//penalty
+					}
+					if (!dex.aCellPos[2] && aDistExt[nCell].aCellPos[2]) {
+						dex.aCellPos[2] = aDistExt[nCell].aCellPos[2];
+						dex.aPulls[2] = aDistExt[nCell].aPulls[2] + 4;//penalty
+					}
+				}
+			}
+		}
+	}
+}
+bool CRStages::IsBoxPushable_(const RStageNode& rsnode, uint8_t nRBox, uint8_t nBoxPos) const {
+	//as alldistances are already measured - check if cells around has distances
+	const Point ptBox = m_Sokoban.CellPoint(nBoxPos + 1);
+	for (Point ptCell : { Point(uint8_t(ptBox.nRow-1), ptBox.nCol), Point(uint8_t(ptBox.nRow + 1), ptBox.nCol), 
+											 Point(ptBox.nRow, uint8_t(ptBox.nCol-1)), Point(ptBox.nRow, uint8_t(ptBox.nCol+1))} ) {
+		if (m_Sokoban.IsSpace(ptCell.nRow, ptCell.nCol)) {
+			int8_t nCell = m_Sokoban.CellPos(ptCell);
+			if (rsnode.aDistExt[nRBox][nCell].aCellPos[0])
+				return true;
+		}
+	}
+	return false;
+}
+void CRStages::CalcBoxDistEx_(const Stage& stage, Point ptBox0, OUT DistExt* pDistExt) const {
+	queue<Stage> queueStages;//BFS
+	Stage current = stage, temp;
+	vector<Point> vCells;
+	current.nWeight = (ptBox0.nRow << 8) | ptBox0.nCol;	//use weight to encode PtBox
+	current.nPIdx = 0;																	//use nPIdx for Depth
+	queueStages.push(current);
+
+	while (!queueStages.empty()) {
+		current = queueStages.front(); queueStages.pop();
+		GetReachableCells_(current, vCells);
+		if (vCells.size() < 5) //minimal non-pull deadlock space
+			continue;
+		//get our box
+		Point ptBox = { uint8_t(current.nWeight >> 8), uint8_t(current.nWeight & 0xFF) };
+		const int nBoxEdges = _BoxEdges(ptBox, vCells);
+		if (!nBoxEdges && !(ptBox0 == ptBox)) //box is unreachable!
+			continue;
+		uint8_t nBoxPos = m_Sokoban.CellPos(ptBox);
+		int64_t llCellPos = m_Sokoban.CellsPos(vCells);
+		uint32_t nIdx = 0;
+		bool bAttended = false;
+		while (nIdx < _countof(pDistExt[0].aCellPos)) {
+			if (pDistExt[nBoxPos].aCellPos[nIdx]) { //already attended in this corral?
+				if (pDistExt[nBoxPos].aCellPos[nIdx] == llCellPos) {
+					bAttended = true; //been there...
+					break;
+				}
+			}
+			else
+				break;//new place
+			++nIdx;
+		}//while nIdx
+		if (bAttended)
+			continue;
+		if (nIdx == _countof(pDistExt[0].aCellPos)) {
+			m_Sokoban.Reporter().PC("Unexpected 4th corral when pulling box from ").P(ptBox0).PC(" to ").P(ptBox).PEol();
+			m_Sokoban.Display(stage);
+			assert(0);
+			abort();
+		}
+		pDistExt[nBoxPos].aPulls[nIdx] = current.nPIdx;
+		pDistExt[nBoxPos].aCellPos[nIdx] = llCellPos;
+		if (nBoxEdges & BOX_TOP) {
+			temp = current; temp.ptR = { uint8_t(ptBox.nRow-1), ptBox.nCol };
+			if (CanPullUp_(temp)) {
+				temp = PullUp_(temp);
+				++temp.nPIdx;	//inc distance
+				temp.nWeight = ((ptBox.nRow - 1) << 8) | ptBox.nCol;
+				queueStages.push(temp);
+			}
+		}
+		if (nBoxEdges & BOX_LT) {
+			temp = current; temp.ptR = { ptBox.nRow, uint8_t(ptBox.nCol-1) };
+			if (CanPullLeft_(temp)) {
+				temp = PullLeft_(temp);
+				++temp.nPIdx;	//inc distance
+				temp.nWeight = (ptBox.nRow<<8)|(ptBox.nCol-1);
+				queueStages.push(temp);
+			}
+		}
+		if (nBoxEdges & BOX_BTM) {
+			temp = current; temp.ptR = { uint8_t(ptBox.nRow + 1), ptBox.nCol };
+			if (CanPullDown_(temp)) {
+				temp = PullDown_(temp);
+				++temp.nPIdx;	//inc distance
+				temp.nWeight = ((ptBox.nRow + 1) << 8) | ptBox.nCol;
+				queueStages.push(temp);
+			}
+		}
+		if (nBoxEdges & BOX_RT) {
+			temp = current; temp.ptR = { ptBox.nRow, uint8_t(ptBox.nCol + 1) };
+			if (CanPullRight_(temp)) {
+				temp = PullRight_(temp);
+				++temp.nPIdx;	//inc distance
+				temp.nWeight = (ptBox.nRow << 8) | (ptBox.nCol + 1);
+				queueStages.push(temp);
+			}
+		}
+	}//while
+}

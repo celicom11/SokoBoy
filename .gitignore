@@ -30,3 +30,16 @@
 *.exe
 *.out
 *.app
+*.user
+*.sln
+/.vs/SokoBoy/v16/ipch/AutoPCH/f0c11126b930f0f8/SOKOBAN.ipch
+/.vs/SokoBoy/v16/ipch/AutoPCH/953b826c6dc2d6af/INITIALIZE.ipch
+/.vs/SokoBoy/v16/ipch/AutoPCH/6249d92ac9d90798/CFGREADER.ipch
+/.vs/SokoBoy/v16/Browse.VC.db
+/.vs/SokoBoy/v16/.suo
+/.vs/slnx.sqlite
+/.vs/ProjectSettings.json
+/.vs/VSWorkspaceState.json
+/.vs/SokoBoy/v16/Browse.VC.opendb
+/.vs/SokoBoy/v16/Browse.VC.db-wal
+/.vs/SokoBoy/v16/Browse.VC.db-shm
