@@ -151,12 +151,12 @@ b. if it is possible to somehow push all boxes except one from the "current" sta
 If/when the "weight" becomes 0, the search stops as the full path to the "goal stage" can be constructed as a path from the initial to current "0-weight" stage + path from that "0-weight" to the "goal stage" (= RSphere center).   
 
 ### Known issues/TODOs
-1. As mentioned above, I am to add the precalculation/usage of the "dynamic dead cells" on occasions when goal squares become occupied and "fixed" like this:
-   \#*    #*  *# 
-    \#    ** #*
-2. Absence of the "Relevance Cuts" prevents solving hard levels like Microban_153.
-3. Limits of 16x16, 64 free spaces to be increased to 20x20, 128 spaces.
-4. Current DFS is rather useless and it must be re-designed to IDFS or something more useful.
+1. As mentioned above, I am to add the precalculation/usage of the "dynamic dead cells" on occasions when goal squares become occupied and "fixed" like this:  
+`#* #*    *#`  
+`_# **   #*_`  
+3. Absence of the "Relevance Cuts" prevents solving hard levels like Microban_153.
+4. Limits of 16x16, 64 free spaces to be increased to 20x20, 128 spaces.
+5. Current DFS is rather useless and it must be re-designed to IDFS or something more useful.
 
 ## Sokoban References/Links
 1. <a id="1">[Jun99]</a> Junghanns, A., *"Pushing the Limits: New Developments in Single-Agent Search."* Doctoral dissertation, University of Alberta, Edmon-
