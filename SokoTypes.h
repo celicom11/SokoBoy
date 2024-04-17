@@ -4,6 +4,7 @@
 #define MAX_DIM    16
 #define MAX_BOXES  16
 #define MAX_SPACES 64
+#define MIN_RC0_SPACE 5 //min corral space wo guaranteed pull-deadlock
 
 //COMMON TYPES
 struct Point {
@@ -69,6 +70,11 @@ struct SokoCfg {
 	wstring         wsSearch;            //Algorithm
 	wstring         wsRpt_Path;          //default is null/Console
 	vector<wstring> vPuzzles;            //list of puzzles; >=1
+};
+//for RSM/DLM internal API
+struct FGStgInfo {
+	int64_t llStgPos{ 0 };
+	int64_t llRCells{ 0 };		//reachable cells by box pulling; just itself/1bit if fixed
 };
 
 //abstract/pure

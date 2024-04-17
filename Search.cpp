@@ -16,11 +16,16 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 
 	do
 	{
+		//DEBUG
+		//if (HasBox(current, 8, 1)) {
+		// __debugbreak();
+		//}
+
 		if (m_Cfg.nRpt_SQInc && abs((int)(nQS - pSQ->Size())) >= m_Cfg.nRpt_SQInc) {
 			Display(current);
 			m_Reporter.PC("DST: ");
-			if (pSQ->Top().nWeight < 0xFFFF)
-				m_Reporter.P(pSQ->Top().nWeight);
+			if (current.nWeight < 0xFFFF)
+				m_Reporter.P(current.nWeight);
 			nQS = pSQ->Size();
 			m_Reporter.PC(" QS: ").P(nQS).PC(" ALL: ").P(m_pClosedStgs->Size()).PC(" DEPTH: ").P(Depth(current)).PC(" DDLs: ").P(m_DLM.DDLCount()).PEol();
 		}
@@ -29,7 +34,7 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 		//2.Analyze corrals for PI-Corral pruning
 		uint8_t nCIdx = sc.GetPICorral();
 		bool bPushed = false;
-		//if on push we create an existing DDL PIC it needs to be merged with the current PIC w/o the pushed box!
+		//if on push an existing DDL PIC is created, latter needs to be merged with the current PIC w/o the pushed box!
 		Corral crlDDL;
 		//3.Pushing
 		for (uint8_t nBox = 0; nBox < sc.C0BoxCount(); ++nBox) {
@@ -46,10 +51,6 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
 						temp.nPIdx = nPIdx;
-						//DEBUG
-						//if (HasBox(temp, 3, 8) && HasBox(temp, 3, 9) && HasBox(temp, 3, 10) && HasBox(temp, 4, 8) && HasBox(temp, 4, 10)) {
-						//	assert(0);
-						//}
 						pSQ->Push(temp);
 					}
 				}

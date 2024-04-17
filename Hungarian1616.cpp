@@ -32,16 +32,12 @@ namespace Hungarian {
 						}
 					}
 				}//for
-				//if (delta == 255)
-				//	return INF;
 				for (int j = 0; j <= nCols; ++j) {
 					if (bstUsed.test(j)) {
 						aU[aP[j]] += delta;
 						aV[j] -= delta;
 					}
 					else {
-						//if (aMinV[j] == INF)
-						//	return 0xFFFF;
 						aMinV[j] -= delta;
 					}
 				}

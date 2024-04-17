@@ -43,3 +43,4 @@
 /.vs/SokoBoy/v16/Browse.VC.opendb
 /.vs/SokoBoy/v16/Browse.VC.db-wal
 /.vs/SokoBoy/v16/Browse.VC.db-shm
+*.ipch

@@ -3,7 +3,7 @@
 #include "ReverseStages.h"
 #include "Reporter.h"
 
-class SQList;
+class SQVec;
 class Sokoban {//field+....
 //DATA
 	
@@ -30,7 +30,7 @@ class Sokoban {//field+....
 	CDLMgr				m_DLM;																//DeadlockMgr
 	CRStages			m_RSM;																//Reverse stages
 	vector<Storage> m_vStg;															//TODO:sort/anaylize orders
-	SQList*				m_pClosedStgs{nullptr};								//temp member to provide node's Depth check for DFS
+	SQVec*				m_pClosedStgs{nullptr};								//temp member to provide node's Depth check for DFS
 
 
 public:
@@ -49,7 +49,7 @@ public:
 		return m_aField[nRow][nCol] == 0;//may be storage
 	}
 	bool IsSpace(int nRow, int nCol) const {
-		return m_aField[nRow][nCol] != 0;//may be also storage
+		return !IsWall(nRow, nCol);
 	}
 	bool IsStorage(int nRow, int nCol) const {
 		return m_aField[nRow][nCol] == 2;
@@ -188,6 +188,9 @@ public:
 		return ret;
 	}
 	void UpdateStageWeight(IN OUT Stage& stage) const;
+	const Storage& Goal(int nIdx) const {
+		return m_vStg[nIdx];
+	}
 //METHODS
 	bool Run();
 	//Reporting helpers
@@ -198,6 +201,7 @@ public:
 	bool Search(IStageQueue* pSQ, IN OUT Stage& current);
 	uint32_t Depth(const Stage& stage) const;
 	uint16_t ParentWeight(const Stage& stage) const;
+	bool AreFixedGoals(const vector<int>& vStgIdx, OUT vector<Point>& vStgPts) const;
 private:
 	bool InitCfg_();
 	bool Initialize_(PCWSTR wszPuzzlePath);
@@ -207,5 +211,5 @@ private:
 	void InitTunnelPos_();			//update m_btsTnlPos
 	//void InitStgDist_();				//update m_aMDist with distances from stg to any cell in empty field 
 	//Pre-move
-	uint16_t MinWalk_(Point pt1, Point pt2) const;
+	//uint16_t MinWalk_(Point pt1, Point pt2) const;
 };

@@ -2,16 +2,15 @@
 
 class Sokoban;
 struct DistExt {
-	//max 2 different corrals are possible around any box, even if its a 0 pulls!
-	uint8_t aPulls[3]{ 255, 255 };	//255 if INF
-	int64_t	aCellPos[3]{ 0, 0 };		//Robot's Corral
-	//int64_t	aPath[2]{ 0, 0 };			//todo: attended cells for penalty assessment...
+	//max 3 different corrals are possible around any box, even if its a 0 pulls!
+	uint8_t aPulls[3]{ 255, 255, 255 };	//255 if INF
+	int64_t	aCellPos[3]{ 0, 0, 0 };		//Robot's Corral
 };
 struct RStageNode {
 	RStageNode(const Stage& node) : stage(node) {}
 	const Stage&	stage;					//external,fixed in m_vClosedStages!
 	//extended pull-distances from each box to all free cells
-	DistExt				aDistExt[16][64];
+	DistExt				aDistExt[MAX_BOXES][MAX_SPACES];
 };
 class CRStages {
 //DATA
@@ -27,8 +26,8 @@ public:
 	bool Init(uint16_t nDepth);
   uint16_t GetMinDist(const Stage& stage) const;		//aka Lower Bound estimation
 	bool CompletePath(IN OUT Stage& current, IN OUT IStageQueue* pSQClosed) const;	//Stage MUST be in one of the m_vCorralRS!
+	void GetReachableCellsEx(int64_t llBoxPos, IN OUT FGStgInfo& fginfo) const;
 private:
-	void GetReachableCells_(const Stage& stage, OUT vector<Point>& vCells) const;
 	bool CanPullUp_(const Stage& stage) const;
 	bool CanPullDown_(const Stage& stage) const;
 	bool CanPullLeft_(const Stage& stage) const;
@@ -42,4 +41,10 @@ private:
 	void CalcBoxDistEx_(const Stage& stage, Point ptBox, OUT DistExt* pDistExt) const;
 	bool HasStage_(const RStageNode& rsnode, const Stage& stage) const;
 	bool IsBoxPushable_(const RStageNode& rsnode, uint8_t nRBox, uint8_t nBoxPos) const;
+	void GetReachableCells_(const Stage& stage, OUT vector<Point>& vCells) const;
+	//Tunneling
+	bool IsPullTunnelUP_(const Stage& stage) const;
+	bool IsPullTunnelDN_(const Stage& stage) const;
+	bool IsPullTunnelLT_(const Stage& stage) const;
+	bool IsPullTunnelRT_(const Stage& stage) const;
 };

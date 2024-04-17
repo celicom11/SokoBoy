@@ -1,6 +1,8 @@
 #include "StdAfx.h"
 #include "DeadLockMgr.h"
 #include "BitMgr45.h"
+#include "Corral.h"
+#include "ReverseStages.h"
 
 bool CDLMgr::Init() {
   m_vDeadPIC.clear();
@@ -31,9 +33,10 @@ bool CDLMgr::Init() {
       }
     }
   }
+  InitFixedGoals_();
   return true;
 }
-bool CDLMgr::IsDeadLock_UP(const Stage& stage, IN OUT Corral& clrDDL) const {
+bool CDLMgr::IsDeadLock_UP(const Stage& stage, IN OUT Corral& crlDDL) const {
   const uint8_t nRow = stage.ptR.nRow - 1, nCol = stage.ptR.nCol; //box pos
   assert(m_Sokoban.HasBox(stage, nRow, nCol));
   if (m_Sokoban.IsDeadHWall(stage, nRow, nCol))
@@ -48,15 +51,19 @@ bool CDLMgr::IsDeadLock_UP(const Stage& stage, IN OUT Corral& clrDDL) const {
   if (IsDeadLock33_(stage, nRow, nCol) || IsDeadLock33_(stage, nRow, nCol-1) || IsDeadLock33_(stage, nRow, nCol+1) ||
     IsDeadLock33_(stage, nRow+1, nCol-1) || IsDeadLock33_(stage, nRow+1, nCol+1))
     return true;
+  //FixedGoal deadlock
+  if (IsFixedGoalDL_(stage))
+    return true;
+  //DDL 
   Corral crlDDLE;//existing
   if (GetDeadCorral_(stage, crlDDLE)) {//exclude pushed Box!
     crlDDLE.llBoxes &= ~(1ll << m_Sokoban.CellPos({ nRow , nCol }));
-    clrDDL.Union(crlDDLE);
+    crlDDL.Union(crlDDLE);
     return true;
   }
   return false;
 }
-bool CDLMgr::IsDeadLock_DN(const Stage& stage, IN OUT Corral& clrDDL) const {
+bool CDLMgr::IsDeadLock_DN(const Stage& stage, IN OUT Corral& crlDDL) const {
   const uint8_t nRow = stage.ptR.nRow + 1, nCol = stage.ptR.nCol; //box pos
   assert(m_Sokoban.HasBox(stage, nRow, nCol));
   if (m_Sokoban.IsDeadHWall(stage, nRow, nCol))
@@ -71,15 +78,19 @@ bool CDLMgr::IsDeadLock_DN(const Stage& stage, IN OUT Corral& clrDDL) const {
   if (IsDeadLock33_(stage, nRow+2, nCol) || IsDeadLock33_(stage, nRow+1, nCol - 1) || IsDeadLock33_(stage, nRow+1, nCol + 1) ||
     IsDeadLock33_(stage, nRow + 2, nCol - 1) || IsDeadLock33_(stage, nRow + 2, nCol + 1))
     return true;
+  //FixedGoal deadlock
+  if (IsFixedGoalDL_(stage))
+    return true;
+  //DDL 
   Corral crlDDLE;//existing
   if (GetDeadCorral_(stage, crlDDLE)) {//exclude pushed Box!
     crlDDLE.llBoxes &= ~(1ll << m_Sokoban.CellPos({ nRow , nCol }));
-    clrDDL.Union(crlDDLE);
+    crlDDL.Union(crlDDLE);
     return true;
   }
   return false;
 }
-bool CDLMgr::IsDeadLock_LT(const Stage& stage, IN OUT Corral& clrDDL) const {
+bool CDLMgr::IsDeadLock_LT(const Stage& stage, IN OUT Corral& crlDDL) const {
   const uint8_t nRow = stage.ptR.nRow, nCol = stage.ptR.nCol-1; //box pos
   assert(m_Sokoban.HasBox(stage, nRow, nCol));
   if (m_Sokoban.IsDeadVWall(stage, nRow, nCol))
@@ -94,15 +105,19 @@ bool CDLMgr::IsDeadLock_LT(const Stage& stage, IN OUT Corral& clrDDL) const {
   if (IsDeadLock33_(stage, nRow, nCol) || IsDeadLock33_(stage, nRow, nCol - 1) || IsDeadLock33_(stage, nRow + 1, nCol - 1) ||
     IsDeadLock33_(stage, nRow + 2, nCol - 1) || IsDeadLock33_(stage, nRow + 2, nCol))
     return true;
+  //FixedGoal deadlock
+  if (IsFixedGoalDL_(stage))
+    return true;
+  //DDL 
   Corral crlDDLE;//existing
   if (GetDeadCorral_(stage, crlDDLE)) {//exclude pushed Box!
     crlDDLE.llBoxes &= ~(1ll << m_Sokoban.CellPos({ nRow , nCol }));
-    clrDDL.Union(crlDDLE);
+    crlDDL.Union(crlDDLE);
     return true;
   }
   return false;
 }
-bool CDLMgr::IsDeadLock_RT(const Stage& stage, IN OUT Corral& clrDDL) const {
+bool CDLMgr::IsDeadLock_RT(const Stage& stage, IN OUT Corral& crlDDL) const {
   const uint8_t nRow = stage.ptR.nRow, nCol = stage.ptR.nCol+1; //box pos
   assert(m_Sokoban.HasBox(stage, nRow, nCol));
   if (m_Sokoban.IsDeadVWall(stage, nRow, nCol))
@@ -118,10 +133,14 @@ bool CDLMgr::IsDeadLock_RT(const Stage& stage, IN OUT Corral& clrDDL) const {
   if (IsDeadLock33_(stage, nRow, nCol) || IsDeadLock33_(stage, nRow, nCol + 1) || IsDeadLock33_(stage, nRow + 1, nCol + 1) ||
     IsDeadLock33_(stage, nRow + 2, nCol + 1) || IsDeadLock33_(stage, nRow + 2, nCol))
     return true;
+  //FixedGoal deadlock
+  if (IsFixedGoalDL_(stage))
+    return true;
+  //DDL 
   Corral crlDDLE;//existing
   if (GetDeadCorral_(stage, crlDDLE)) {//exclude pushed Box!
     crlDDLE.llBoxes &= ~(1ll << m_Sokoban.CellPos({ nRow , nCol }));
-    clrDDL.Union(crlDDLE);
+    crlDDL.Union(crlDDLE);
     return true;
   }
   return false;
@@ -145,10 +164,10 @@ bool CDLMgr::IsDeadPIC(const Stage& stage) const {
   }
   return false;
 }
-bool CDLMgr::GetDeadCorral_(const Stage& stage, OUT Corral& clrDDL) const {
+bool CDLMgr::GetDeadCorral_(const Stage& stage, OUT Corral& crlDDL) const {
   for (const Corral& crl : m_vDeadPIC) {
     if ((crl.llBoxes & stage.llBoxPos) == crl.llBoxes && ((1ll << m_Sokoban.CellPos(stage.ptR)) & crl.llCells) == 0) {//R must be outside!
-      clrDDL = crl;
+      crlDDL = crl;
       return true;
     }
   }
@@ -299,4 +318,80 @@ bool CDLMgr::TestDL23OnPushRT_(const Stage& stage, int nRow, int nCol) const {
       return true;
   }
   return false;
+}
+//FG DL
+bool CDLMgr::IsFixedGoalDL_(const Stage& stage) const {
+  //find max FG config
+  uint16_t nMaxBits = 0;
+  const FixedGoals* pFG = nullptr;
+  for (const FixedGoals& fg : m_vFG) {
+    if (fg.llFGPos == (fg.llFGPos & stage.llBoxPos)) {//stage contains FG cells
+      if (nMaxBits < fg.nBits) {
+        nMaxBits = fg.nBits;
+        pFG = &fg;
+      }
+    }
+  }
+  if (pFG) {
+    if (stage.llBoxPos & pFG->llDeadPos)
+      return true; //some box is in FG DeadPos!
+    for (const FGStgInfo& fginfo : pFG->vGI) {
+      if (stage.llBoxPos & fginfo.llStgPos) //in place/OK
+        continue; //G is */filled
+      if (0 == (stage.llBoxPos & fginfo.llRCells))
+        return true; //FG DL, as non of the boxes can be pushed to this G! TODO: count/mark boxes for each G?
+    }
+  }//for GI
+  return false;
+}
+uint16_t CDLMgr::GetFGLBits(const Stage& stage) const {
+  //find max FG config
+  uint16_t nMaxBits = 0;
+  for (const FixedGoals& fg : m_vFG) {
+    if (fg.llFGPos == (fg.llFGPos & stage.llBoxPos)) {//stage contains FG cells
+      if (nMaxBits < fg.nBits)
+        nMaxBits = fg.nBits;
+    }
+  }
+  return nMaxBits;
+}
+void CDLMgr::InitFixedGoals_() {
+  const int nMaxB = (1 << m_Sokoban.BoxCount())-1;//2^16-1 max
+  m_vFG.clear();
+  vector<Point> vStgPts;
+  for (int nBMask = 1; nBMask < nMaxB; ++nBMask) {
+    vector<int> vStgIdx; vStgIdx.reserve(m_Sokoban.BoxCount());
+    int nTmp = nBMask, nBitPos = 0;
+    while (nTmp) {
+      if (nTmp & 1)
+        vStgIdx.push_back(nBitPos);
+      ++nBitPos;
+      nTmp >>= 1;
+    }
+    if (m_Sokoban.AreFixedGoals(vStgIdx, vStgPts))
+      AddFixedGoal_(vStgPts);
+  }//for
+}
+void CDLMgr::AddFixedGoal_(const vector<Point>& vStgPts) {
+  FixedGoals fgs;
+  fgs.nBits = (uint16_t)vStgPts.size();
+  fgs.llFGPos = m_Sokoban.CellsPos(vStgPts);
+
+  CRStages rsm(m_Sokoban);
+  int64_t llAllReachableCells = 0;
+  for (uint16_t nBox = 0; nBox < m_Sokoban.BoxCount(); ++nBox) {
+    Point ptG = m_Sokoban.Goal(nBox).pt;
+    FGStgInfo fginfo;
+    fginfo.llStgPos = 1ll << m_Sokoban.CellPos(ptG);
+    if (fginfo.llStgPos & fgs.llFGPos)
+      continue;//G is in FG
+    rsm.GetReachableCellsEx(fgs.llFGPos | fginfo.llStgPos, fginfo);
+    fgs.vGI.push_back(fginfo);
+  }//for nBox
+  //calc FG dead pos
+  fgs.llDeadPos = ~m_Sokoban.FinalBoxPos();//all cells, except all Goals
+  for (const FGStgInfo& fginfo : fgs.vGI) {
+    fgs.llDeadPos &= ~fginfo.llRCells;//all common unreachable cells, if any
+  }
+  m_vFG.push_back(fgs);
 }

@@ -15,9 +15,9 @@ class CStageCorrals {
   uint8_t             m_nLastCIdx;
   uint8_t             m_nBoxCount{ 0 };         //reachable boxes
   uint8_t             m_nC0BoxCount{ 0 };       //Corral0 box count
-  Point               m_aBoxes[16];             //boxes reachable from C0
+  Point               m_aBoxes[MAX_BOXES];      //boxes reachable from C0
   //Stage cells: 0-Unkn, 1-Wall, 2-Box, 3+: Corral idx of the empty cell
-  uint8_t             m_aCells[16][16]{ 0 };
+  uint8_t             m_aCells[MAX_DIM][MAX_DIM]{ 0 };
 public:
 //CTOR/DTOR
   CStageCorrals(const Sokoban& sb) : m_Sokoban(sb){};
@@ -33,6 +33,7 @@ public:
   void Init(const Stage* pStage);
   int8_t GetPICorral();
   Corral GetCorral(uint8_t nCIdx) const;
+
 private:
   bool HasCorralEdge_(Point ptBox, uint8_t nCIdx) const {
     return m_aCells[ptBox.nRow - 1][ptBox.nCol] == nCIdx || m_aCells[ptBox.nRow + 1][ptBox.nCol] == nCIdx ||
@@ -57,11 +58,11 @@ private:
   bool IntCanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT bitset<256>& btsBoxMark) const;//recursive
   bool IntCanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT bitset<256>& btsBoxMark) const;//recursive
   bool CanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const {
-    bitset<256> btsBoxMark; btsBoxMark.set(nRow * 16 + nCol);
+    bitset<256> btsBoxMark; btsBoxMark.set(nRow * MAX_DIM + nCol);
     return IntCanUnblockUD_(nRow, nCol, nCIdx, btsBoxMark);
   }
   bool CanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const {
-    bitset<256> btsBoxMark; btsBoxMark.set(nRow * 16 + nCol);
+    bitset<256> btsBoxMark; btsBoxMark.set(nRow * MAX_DIM + nCol);
     return IntCanUnblockLR_(nRow, nCol, nCIdx, btsBoxMark);
   }
   void InitBoxCell_(uint8_t nRow, uint8_t nCol, bool bC0);
@@ -72,4 +73,5 @@ private:
   }
   void OnInnerCorralAdded_();
   bool IsPICorral_(uint8_t nCIdx) const;
+  bool IsSingleCorral_() const;
 };

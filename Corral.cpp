@@ -78,15 +78,23 @@ Corral CStageCorrals::GetCorral(uint8_t nCIdx) const {
 				crlRet.llBoxes |= 1ll << m_Sokoban.CellPos(ptBox);
 		}
 	}
-	for (uint8_t nRow = 0; nRow < 16; ++nRow) {
-		for (uint8_t nCol = 0; nCol < 16; ++nCol) {
+	for (uint8_t nRow = 0; nRow < MAX_DIM; ++nRow) {
+		for (uint8_t nCol = 0; nCol < MAX_DIM; ++nCol) {
 			if (m_aCells[nRow][nCol] == nCIdx)
 				crlRet.llCells |= 1ll << m_Sokoban.CellPos({ nRow, nCol });
 		}
 	}
 	return crlRet;
 }
-
+bool CStageCorrals::IsSingleCorral_() const {
+	for (uint8_t nRow = 0; nRow < MAX_DIM; ++nRow) {
+		for (uint8_t nCol = 0; nCol < MAX_DIM; ++nCol) {
+			if (!m_Sokoban.NotSpace(*m_pStage, nRow, nCol) && m_aCells[nRow][nCol] != CIDX0)
+				return false;
+		}
+	}
+	return true;
+}
 void CStageCorrals::InitBoxCell_(uint8_t nRow, uint8_t nCol, bool bC0) {
 	if (m_aCells[nRow][nCol] == CUNKN) {
 		if (m_Sokoban.IsWall(nRow, nCol))
@@ -100,7 +108,6 @@ void CStageCorrals::InitBoxCell_(uint8_t nRow, uint8_t nCol, bool bC0) {
 		}
 	}
 }
-
 void CStageCorrals::AddCorral_(Point ptCell, uint8_t nCIdx){
 	Stage temp, current = *m_pStage;
 	current.ptR = ptCell;
@@ -170,7 +177,6 @@ void CStageCorrals::AddCorral_(Point ptCell, uint8_t nCIdx){
 	}//while
 }
 
-
 //sokobano.de/wiki/index.php?title=Sokoban_solver_%22scribbles%22_by_Brian_Damgaard_about_the_YASS_solver#PI-Corral_pruning
 //returns 0 if not found, otherwise corral's idx-1 (that is >0!)
 // 
@@ -180,18 +186,18 @@ void CStageCorrals::AddCorral_(Point ptCell, uint8_t nCIdx){
 //  G.OON   
 // RGB11N
 //    NN
-
-// Presumed that we have corral 2 at teh top, "our" single cell PI-Corral in the middle and corral 1 at the bottom-right.
-// The top G can be pushed RT w.o locking top/1-cell corral, however, it does not make 3x3 DL but it MAY or NOT lock the next corral 1.
+//
+// Presumed that we have corral 2 at the top, "our" single cell PI-Corral in the middle and corral 1 at the bottom-right.
+// The top G can be pushed RT wo locking top/1-cell corral, however, it does not make 3x3 DL but it MAY or NOT lock the next corral 1.
 // If corral 1 is DDL, our corral becomes also DDL what is incorrect as it is not a DL Corral per se (w/o corral 1).
 // For correct DDL detection, the influence of such  "neighbour corrals" can be resolved only by merging it with 
 // corral 1 to a single PI-Corral! It is NOT the same for the unlocked top B, as the pushed left G CANNOT lead to the DL of the unlocked corral 2!
 //NOTE: For this, instead of POST-corral analysis merging, we merge it with the detected DDL boxpos - to be verified...
-
 int8_t CStageCorrals::GetPICorral() {
 	Point ptCell;
-	if (m_nC0BoxCount <= 2 || m_nC0BoxCount == m_Sokoban.BoxCount())
+	if (m_nC0BoxCount <= 2 || IsSingleCorral_()) //|| m_nC0BoxCount == m_Sokoban.BoxCount() was an error!
 		return 0; //do not waste time
+	
 	//1.fill ALL spaces w Corral Idx;
 	for (int8_t nBox = 0; nBox < m_nC0BoxCount; ++nBox) { //go through Corral0 boxes
 		Point ptBox = m_aBoxes[nBox];
@@ -224,8 +230,8 @@ int8_t CStageCorrals::GetPICorral() {
 	//2. add missed boxes if any
 	if (m_nBoxCount < m_Sokoban.BoxCount()) {
 		uint8_t nAllBoxes = m_nBoxCount;
-		for (uint8_t nRow = 0; nRow < 16; ++nRow) {
-			for (uint8_t nCol = 0; nCol < 16; ++nCol) {
+		for (uint8_t nRow = 0; nRow < MAX_DIM; ++nRow) {
+			for (uint8_t nCol = 0; nCol < MAX_DIM; ++nCol) {
 				if (m_aCells[nRow][nCol] == CUNKN && m_Sokoban.HasBox(*m_pStage, nRow, nCol)) {
 					m_aCells[nRow][nCol] = CBOX;
 					m_aBoxes[nAllBoxes] = { nRow, nCol };
@@ -274,14 +280,14 @@ void CStageCorrals::OnInnerCorralAdded_() {
 		}
 	}
 }
-//NOT PI-Corral if
-// A) All boxes are G
+
+// I-Corral is not NOT PI-Corral if
+// A) All boxes are G AND there is no free G inside!
 // B) if Box cannot be pushed inside CIdx(shown as 1), but can be pushed after 1+ boxes are pushed in corral0(shown as 1)
 //Example of blocked upper box 'b'
 //1B1 1BB BB1
 //NbN	NbN	NbN
 //?2?	?2?	?2?
-
 bool CStageCorrals::IsPICorral_(uint8_t nCIdx) const {
 	bool bRet = false;//pessimistic
 	for (uint8_t nBox = 0; nBox < m_nBoxCount; ++nBox) { //go through non-Corral0 boxes
@@ -290,7 +296,8 @@ bool CStageCorrals::IsPICorral_(uint8_t nCIdx) const {
 		if (!HasCorralEdge_(ptBox, nCIdx))
 			continue;
 		if(!m_Sokoban.IsStorage(ptBox.nRow, ptBox.nCol))
-			bRet = true;//undelivered box
+			bRet = true;//non-G box
+
 		//cbx xbc ,x!=CIdx
 		//BbB BbB
 		if (CanMoveOutsideCorral_(ptBox, nCIdx)) //its a gate/ not an I-Corral; see "rear examples" below
@@ -341,10 +348,19 @@ bool CStageCorrals::IsPICorral_(uint8_t nCIdx) const {
 			if (CanUnblockUD_(ptBox.nRow, ptBox.nCol + 1, nCIdx))
 				return false;
 		}
+	} //for nBox
+	if (!bRet) {
+		//we r here if all this is I-Corral with all G boxes on the border
+		//however, if there is a free G cell inside - we must return TRUE!
+		for (uint8_t nRow = 0; nRow < MAX_DIM; ++nRow) {
+			for (uint8_t nCol = 0; nCol < MAX_DIM; ++nCol) {
+				if (m_aCells[nRow][nCol] == nCIdx && m_Sokoban.IsStorage(nRow, nCol))
+					return true;
+			}
+		}
 	}
 	return bRet;//good PI Corral!
 }
-
 bool CStageCorrals::IntCanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT bitset<256>& btsBoxMark) const {
 	assert(m_aCells[nRow][nCol] == CBOX);//debug
 	//must be a box reachable in C!=nCIdx
@@ -355,15 +371,15 @@ bool CStageCorrals::IntCanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, 
 		if (m_aCells[nRow][nCol + 1] >= CIDX0 && m_aCells[nRow][nCol + 1] != nCIdx)	//...and right is another corral
 			return !m_Sokoban.IsDeadPos(nRow, nCol + 1) || !m_Sokoban.IsDeadPos(nRow, nCol - 1);
 		//else, check an obstacle on the right
-		if (m_aCells[nRow][nCol + 1] == CBOX && !btsBoxMark.test(nRow * 16 + nCol + 1)) {
-			btsBoxMark.set(nRow * 16 + nCol + 1);
+		if (m_aCells[nRow][nCol + 1] == CBOX && !btsBoxMark.test(nRow * MAX_DIM + nCol + 1)) {
+			btsBoxMark.set(nRow * MAX_DIM + nCol + 1);
 			return IntCanUnblockUD_(nRow, nCol + 1, nCIdx, btsBoxMark);
 		}
 	} 
 	else if (m_aCells[nRow][nCol + 1] >= CIDX0 && m_aCells[nRow][nCol + 1] != nCIdx) {//only right is free
 		//check an obstacle on the left
-		if (m_aCells[nRow][nCol - 1] == CBOX && !btsBoxMark.test(nRow * 16 + nCol - 1)) {
-			btsBoxMark.set(nRow * 16 + nCol - 1);
+		if (m_aCells[nRow][nCol - 1] == CBOX && !btsBoxMark.test(nRow * MAX_DIM + nCol - 1)) {
+			btsBoxMark.set(nRow * MAX_DIM + nCol - 1);
 			return IntCanUnblockUD_(nRow, nCol - 1, nCIdx, btsBoxMark);
 		}
 	}
@@ -380,15 +396,15 @@ bool CStageCorrals::IntCanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, 
 		if (m_aCells[nRow + 1][nCol] >= CIDX0 && m_aCells[nRow + 1][nCol] != nCIdx)		//...and btm is free
 			return !m_Sokoban.IsDeadPos(nRow + 1, nCol) || !m_Sokoban.IsDeadPos(nRow - 1, nCol);
 		//else, check an obstacle on the bottom
-		if (m_aCells[nRow+1][nCol] == CBOX && !btsBoxMark.test((nRow+1) * 16 + nCol)) {
-			btsBoxMark.set((nRow+1) * 16 + nCol);
+		if (m_aCells[nRow+1][nCol] == CBOX && !btsBoxMark.test((nRow+1) * MAX_DIM + nCol)) {
+			btsBoxMark.set((nRow+1) * MAX_DIM + nCol);
 			return IntCanUnblockLR_(nRow+1, nCol, nCIdx, btsBoxMark);
 		}
 	}
 	else if (m_aCells[nRow + 1][nCol] >= CIDX0 && m_aCells[nRow + 1][nCol] != nCIdx) {//only btm is free
 		//check an obstacle on top
-		if (m_aCells[nRow-1][nCol] == CBOX && !btsBoxMark.test((nRow-1) * 16 + nCol)) {
-			btsBoxMark.set((nRow-1) * 16 + nCol);
+		if (m_aCells[nRow-1][nCol] == CBOX && !btsBoxMark.test((nRow-1) * MAX_DIM + nCol)) {
+			btsBoxMark.set((nRow-1) * MAX_DIM + nCol);
 			return IntCanUnblockLR_(nRow-1, nCol, nCIdx, btsBoxMark);
 		}
 	}

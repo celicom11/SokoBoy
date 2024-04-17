@@ -18,7 +18,7 @@ namespace {
 	}
 }
 Sokoban::Sokoban() : m_DLM(*this), m_RSM(*this) {
-	m_pClosedStgs = new SQList;
+	m_pClosedStgs = new SQVec;
 }
 Sokoban::~Sokoban() {
 	delete m_pClosedStgs;
@@ -168,6 +168,8 @@ bool Sokoban::IsDeadVWall(const Stage& temp, int nRow, int nCol) const {
 }
 void Sokoban::UpdateStageWeight(IN OUT Stage& stage) const {
 	stage.nWeight = m_RSM.GetMinDist(stage);
+	if (stage.nWeight >= 0xFFFF - m_nBoxes)
+		stage.nWeight = 0xFFFF - m_DLM.GetFGLBits(stage);
 }
 uint32_t Sokoban::Depth(const Stage& stage) const{
 	uint32_t nRet = 0;
@@ -182,5 +184,33 @@ uint16_t Sokoban::ParentWeight(const Stage& stage) const {
 	const Stage* pParent = m_pClosedStgs->Parent(stage);
 	return pParent ? pParent->nWeight : 0xFFFF;
 }
+bool Sokoban::AreFixedGoals(const vector<int>& vStgIdx, OUT vector<Point>& vStgPts) const {
+	vStgPts.clear();
+	Stage stage;
+	for (int nIdx : vStgIdx) {
+		vStgPts.push_back(m_vStg[nIdx].pt);
+		stage.llBoxPos |= 1ll << CellPos(vStgPts.back());
+	}
+	for (Point ptG : vStgPts) {
+		if (
+			(NotSpace(stage, ptG.nRow - 1, ptG.nCol) || NotSpace(stage, ptG.nRow + 1, ptG.nCol) || 
+				(IsDeadPos(ptG.nRow - 1, ptG.nCol) && IsDeadPos(ptG.nRow + 1, ptG.nCol)) ) &&
+			(NotSpace(stage, ptG.nRow, ptG.nCol - 1) || NotSpace(stage, ptG.nRow, ptG.nCol + 1) || 
+				(IsDeadPos(ptG.nRow, ptG.nCol- 1 ) && IsDeadPos(ptG.nRow, ptG.nCol + 1)) )
+			)
+			continue;//~static DL
+		//else
+		if (!NotSpace(stage, ptG.nRow - 1, ptG.nCol) && !NotSpace(stage, ptG.nRow - 2, ptG.nCol))
+				return false;
+		if (!NotSpace(stage, ptG.nRow + 1, ptG.nCol) && !NotSpace(stage, ptG.nRow + 2, ptG.nCol))
+			return false;
+		if (!NotSpace(stage, ptG.nRow, ptG.nCol - 1) && !NotSpace(stage, ptG.nRow, ptG.nCol - 2))
+			return false;
+		if (!NotSpace(stage, ptG.nRow, ptG.nCol + 1) && !NotSpace(stage, ptG.nRow, ptG.nCol + 2))
+			return false;
+	}
+	return true;
+}
+
 
 

@@ -181,20 +181,20 @@ void Sokoban::InitDeadVWalls_() {
 		}
 	}
 }
-//void Sokoban::InitStgDist_() {
-//	for (Storage& stg : m_vStg) {
-//		memset(stg.aMDist, 0xFFFF, sizeof(stg.aMDist));
-//		for (uint8_t i = 0; i < m_dim.nRows; i++) {
-//			for (uint8_t j = 0; j < m_dim.nCols; j++) {
-//				if (IsSpace(i, j))
-//					stg.aMDist[m_aBitPos[i][j]-1] = MinWalk_(stg.pt, { i,j });
-//			}
-//		}
-//	}
-//	//TODO: SGoal struct with calculated wwight 
-//	//corners are high priority,etc.
-//	//next - check if taking some goals first, blocks some boxes from being delivered to any other storages.
-//}
+/*void Sokoban::InitStgDist_() {
+	for (Storage& stg : m_vStg) {
+		memset(stg.aMDist, 0xFFFF, sizeof(stg.aMDist));
+		for (uint8_t i = 0; i < m_dim.nRows; i++) {
+			for (uint8_t j = 0; j < m_dim.nCols; j++) {
+				if (IsSpace(i, j))
+					stg.aMDist[m_aBitPos[i][j]-1] = MinWalk_(stg.pt, { i,j });
+			}
+		}
+	}
+	//TODO: SGoal struct with calculated wwight 
+	//corners are high priority,etc.
+	//next - check if taking some goals first, blocks some boxes from being delivered to any other storages.
+}
 //InitStgDist_ helper - walk through NON-dead pos!
 uint16_t Sokoban::MinWalk_(Point pt1, Point pt2) const {
 	if (IsDeadPos(pt1.nRow, pt1.nCol) || IsDeadPos(pt2.nRow, pt2.nCol))
@@ -249,7 +249,7 @@ uint16_t Sokoban::MinWalk_(Point pt1, Point pt2) const {
 		queueStages.pop();
 	}//while
 	return current.nWeight;
-}
+}*/
 
 bool Sokoban::InitCfg_() {
 	CCfgReader crdr;
@@ -413,17 +413,16 @@ bool Sokoban::Initialize_(PCWSTR wszPuzzlePath) {
 		m_Reporter.PC("Number of boxes ").P(m_nBoxes).PC(" is not equal to number of storages ").P((uint32_t)m_vStg.size()).PC(" !\n");
 		return false;
 	}
-	if(!m_DLM.Init()) {
-		m_Reporter.PC("Failed to init DeadLock manager!").PEol();
-		return false;
-	}
 	//Precalculations/analysis
-	//InitDeadBoxBits_();
 	InitDeadHWalls_();
 	InitDeadVWalls_();
 	AddDeadCornerPos_();
 	InitTunnelPos_();
 	//InitStgDist_();
+	if (!m_DLM.Init()) {
+		m_Reporter.PC("Failed to init DeadLock manager!").PEol();
+		return false;
+	}
 	if (m_Cfg.wsSearch != L"BFS") {
 		uint16_t nRSMDepth = m_Cfg.nRSM_Depth ? m_Cfg.nRSM_Depth : (uint16_t)log2(m_nSpaces) + m_nBoxes*2/3;// *5 / 4;
 		m_RSM.Init(nRSMDepth);
