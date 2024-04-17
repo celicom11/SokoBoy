@@ -90,11 +90,11 @@ See the details/terms in "Sokoban: Solving Techniques,..." and "Notes on Impleme
 Contains a number of puzzles/levels taken from open public sources and used for the Sokoboy testing.
 - Easy levels: all IonicCatalysts*,Zone26*,sasquatch_iv_26,Original_38,MainCol_633 and few more - all taken from the great https://www.sokobanonline.com/ site.
 - Hard Levels (taks 1-10 min or more!):
-  - GS11065 (from [RevengeCollections](http://www.game-sokoban.com/index.php?mode=level&lid=11065)But AStars solves it in 173 seconds with RSM_Depth=8) 
+  - GS11065 (from [RevengeCollections](http://www.game-sokoban.com/index.php?mode=level&lid=11065) AStars solves it in ~3 min with RSM_Depth=8) 
   - grigr2001_Dve_dorogi_71 - taken from some test set
+  - Microban_153 - got solved in ~50 min (!) with AStar with RSM_Depth=5 (could be 1) after adding FixedGoals deadlock/weighting. 
 - Unsolvable levels:
-  - 6170_moves_more from https://sokoban-max-moves.herokuapp.com/ - just to investigate how this can be solved in principle.
-  - MainCol_633 - the issue here is not just the large optimal push number (~370) but the absence of the "dynamic dead cells" plus the "relevance cuts" in the Sokoboy.  
+  - 6170_moves_more from https://sokoban-max-moves.herokuapp.com/ - just to investigate if/how this can be solved in principle.
 ## How to Contribute
 As for any new/not-well-tested software, any suggestions, requests, bug findings, etc. are **VERY WELCOME**! Modifying/extending current code could be done with the standard GitHub forking/pulling [workflow](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project).
 
@@ -105,7 +105,7 @@ Imho, the most fundamental and comprehensive work I have found so far was the do
 Here is a list terms and the key approaches names with (*)/comments if they are used in the SokoBoy. The detailed of description of these terms can be found in the links/papers provided below:
 - Moves/Pushes Parity (invariant).
 - Breadth First Search/BFS; Depth First Search/DFS, Iterative Deepening Depth-First Search/IDDFS.  (*, IDDFS is not implemented in SokoBoy)
-- Tunneling/Macromoves (* SokoBoy implements Tunneling as described in [[sboYass]] and other sources.
+- Tunneling/Macromoves (* SokoBoy implements Tunneling as described in [[sboYass]](#4) and other sources.
 - Goal Parking Order/GPO.
 - Push/Move Ordering, Inertia Move. 
 - Deadlock/Deadlocks Table Database. (*, SokoBoy has enhanced Dynamic DeadLocks approach)
@@ -128,35 +128,35 @@ At the beginning, I tried to find/prepare a decent database of all possible (at 
 2. Quick run-time check of the 3x3 deadlock based on the known 2x3 deadlocks.
 3. Check against "dead" PI-Corrals which are detected/saved dynamically (see below).
 ### Dead Cells/Walls
-- The "dead wall" is a wall with two blocked ends:
-  \#         \#
-   \####...###
+- The "dead wall" is a wall with two blocked ends:  
+  \#_________\#  
+  \####...###  
 - If there are no any goal/storage cells near that "wall" all cells are treated/saved as "dead" - no boxes can be placed there.
 - If there is a 1+ goal, the algorithm still remembers these "walls" and prohibits pushing to the wall's cells more boxes than the number of the goals there. **Note:** This only partially compensates the absence of the dynamic "dead squares" recalculation done by RollinStone's solver when a box reaches the "fixed" goal - tobe added to Sokoboy soon.    
 ### PI-Corrals/Merging
 PI-Corral's pruning is a great idea introduced in YASS solver. While it is clear how it should work, I feel it is not well formalized/verified especially when it comes to merging the neighbor PI-Corrals. I could not understand the pseudo code in [[sboYass]] and could not find an answer on how to treat the box on the PI-Corral's border which cannot be moved immediately, because it is blocked by another box. So, the job was done and Sokoboy can well merge PI-Corrals when and only when it is necessary. The algorithm is yet to be verified/tested.  
 ### Dynamic Deadlocks
 As mentioned above for each stage, the Search first obtains a Corral0 to get all "reachable cells". The next step is to check for the existence of the PI-Corral (merged with neighbors if needed). Then, if the robot could not push a single box without being deadlocked, the current PI-Corral is treated as a **Dynamic Deadlock/DDL**. The location of the boxes is saved by the DeadlockManager and all next stages are checked against the presence of this "dead" PI-Corral (by simple bitwise AND check, as mentioned above). 
+### Fixed Goals
+TODO!
 ### LBE Heuristic/"Reverse Sphere"
-The "lower bound estimation" heuristic is, imho, the crucial part of any AStar-like algorithms for the simple reason - if it could well approximate the distance between the current and the goal stages, it could find the solution almost immediately by picking the next best stage from the current(or stages - not big difference) and approaching to the goal stage by the linear time or so. That's why it is OK to spend a considerable time trying to improve the calculation of the LBE function at the static stage analysis (before pushing any box). See more details in [[Jun99]] and [[pdb]](#5).
+The "lower bound estimation" heuristic is, imho, the crucial part of any AStar-like algorithms for the simple reason - if it could well approximate the distance between the current and the goal stages, it could find the solution almost immediately by picking the next best stage from the current(or stages - not big difference) and approaching to the goal stage by the linear time or so. That's why it is OK to spend a considerable time trying to improve the calculation of the LBE function at the static stage analysis (before pushing any box). See more details in [[Jun99]](#1) and [[pdb]](#5).
 SokoBoy uses a kind-of a "bidirectional reverse search" approach. That is, 
 - when the puzzle gets loaded, after basic initializations, the CRStages object runs reverse BFS/RBFS to pull boxes from the goal stage (from all possible corrals!) to build the tree of some heuristic (__or  *RSM_Depth* config value__) depth. The leaf nodes/stages of this tree are called an **Reverse Sphere/RSphere**. [**Note:** the term "sphere"/circle come from the fact that both BFS/RBFS generates all possible nodes with **exact** distances from the starting stage (center). Also, it is not possible to reach the "center" stage from some outer stage without bypassing at least one stage on the surface of the "RSphere"].   
-Then, for each RSphere stage/for each box, the pull distance from the box to all free cells is obtained. We do not discard all other boxes (like a "Simple Lower Bound"/Manhattan distance described in [[Jun99]] and others), so they may influence or even block the given box to reach some free cells. To relax this rather strong restriction, the distance measurement is repeated by removing the _RSM_GBRelax_ number (currently 0 or 1 only) of "movable" boxes and updating the distances to the "unreachable" cells in the first measurement with the new one with some "penalty" (=4 for now). It presumes, the box could be pushed/pulled way to allow the current box to reach a given "free cell" and then moved back.
+Then, for each RSphere stage/for each box, the pull distance from the box to all free cells is obtained. We do not discard all other boxes (like a "Simple Lower Bound"/Manhattan distance described in [[Jun99]](#1) and others), so they may influence or even block the given box to reach some free cells. To relax this rather strong restriction, the distance measurement is repeated by removing the _RSM_GBRelax_ number (currently 0 or 1 only) of "movable" boxes and updating the distances to the "unreachable" cells in the first measurement with the new one with some "penalty" (=4 for now). It presumes, the box could be pushed/pulled way to allow the current box to reach a given "free cell" and then moved back.
 This heuristic, technically, cannot be called an LBE as the real push/pull distance can be less than this estimation. The rationale for this approach is: 
-a. use the influence of the neighbor boxes instead of analyzing "Linear Conflicts" etc. (see [[Jun99]])
+a. use the influence of the neighbor boxes instead of analyzing "Linear Conflicts" etc. (see [[Jun99]](#1))
 b. if it is possible to somehow push all boxes except one from the "current" stage  to the RSphere's box positions, such pre-calculated "pull distance" becomes a "real push distance" for that last box.
 - at the runtime/search phase, the "weight" of the current stage is re-calculated after every push as a minimal LBE to one of the RSphere stages using
   1. pre-calculated above pull distances
-  2. Hungarian method as described in [[Jun99]]/[[Virkk]] to calculate a real minimal distance for a set of boxes/goals.
+  2. Hungarian method as described in [[Jun99]](#1)/[[Virkk]](#2) to calculate a real minimal distance for a set of boxes/goals.
 If/when the "weight" becomes 0, the search stops as the full path to the "goal stage" can be constructed as a path from the initial to current "0-weight" stage + path from that "0-weight" to the "goal stage" (= RSphere center).   
 
 ### Known issues/TODOs
-1. As mentioned above, I am to add the precalculation/usage of the "dynamic dead cells" on occasions when goal squares become occupied and "fixed" like this:  
-`#* #*    *#`  
-`_# **   #*_`  
-3. Absence of the "Relevance Cuts" prevents solving hard levels like Microban_153.
-4. Limits of 16x16, 64 free spaces to be increased to 20x20, 128 spaces.
-5. Current DFS is rather useless and it must be re-designed to IDFS or something more useful.
+1. DONE: FixedGoals deadlock/weighting is added on 20240417. This allowed to solve (somehow/very long ~3000 sec) the Microban_153 puzzle with AStar, but RSphere per-se is not helpful there and just slows the process , so its better to decrease it to RSM_Depth=1 or so. FixedGoals are used to detect a new dynamyc deadlock type : when some some boxesare fixed at the goal squares and some box is located at the square, where it cannot be reached from any other/non-fixed goal squares. The concept of the "fixed goals" has interesting generalisation which could be something new - to be described above soon.  
+2. Absence of the "Relevance Cuts" prevents solving hard levels like Microban_153.
+3. Limits of 16x16, 64 free spaces to be increased to 20x20, 128 spaces.
+4. Current DFS is rather useless and it must be re-designed to IDFS or something more useful.
 
 ## Sokoban References/Links
 1. <a id="1">[Jun99]</a> Junghanns, A., *"Pushing the Limits: New Developments in Single-Agent Search."* Doctoral dissertation, University of Alberta, Edmon-
