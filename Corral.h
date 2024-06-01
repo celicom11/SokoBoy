@@ -15,6 +15,8 @@ class CStageCorrals {
   uint8_t             m_nLastCIdx;
   uint8_t             m_nBoxCount{ 0 };         //reachable boxes
   uint8_t             m_nC0BoxCount{ 0 };       //Corral0 box count
+  uint8_t             m_nLastPICIdx{ 0 };       //cache
+  int64_t             m_llExternalLocked{ 0 };  //last PIC is special!
   Point               m_aBoxes[MAX_BOXES];      //boxes reachable from C0
   //Stage cells: 0-Unkn, 1-Wall, 2-Box, 3+: Corral idx of the empty cell
   uint8_t             m_aCells[MAX_DIM][MAX_DIM]{ 0 };
@@ -35,6 +37,16 @@ public:
   Corral GetCorral(uint8_t nCIdx) const;
 
 private:
+  bool HasBox_(Point ptCell) const {
+    return m_aCells[ptCell.nRow][ptCell.nCol] == CBOX;
+  }
+  inline bool NotSpace_(Point ptCell) const;
+  inline bool IsDead_(Point ptCell) const;
+  inline bool IsWall_(Point ptCell) const;
+  inline bool IsG_(Point ptCell) const;
+  inline bool IsNonCorralSpace_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const;
+  inline bool IsOtherCorralSpace_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const;
+
   bool HasCorralEdge_(Point ptBox, uint8_t nCIdx) const {
     return m_aCells[ptBox.nRow - 1][ptBox.nCol] == nCIdx || m_aCells[ptBox.nRow + 1][ptBox.nCol] == nCIdx ||
       m_aCells[ptBox.nRow][ptBox.nCol - 1] == nCIdx || m_aCells[ptBox.nRow][ptBox.nCol + 1] == nCIdx;
@@ -45,33 +57,21 @@ private:
       (m_aCells[ptBox.nRow][ptBox.nCol - 1] >= CIDX0 && m_aCells[ptBox.nRow][ptBox.nCol - 1] != nCIdx) ||
       (m_aCells[ptBox.nRow][ptBox.nCol + 1] >= CIDX0 && m_aCells[ptBox.nRow][ptBox.nCol + 1] != nCIdx);
   }
-  bool CanMoveInCorral_(Point ptBox, uint8_t nCIdx) const {
-    return (m_aCells[ptBox.nRow - 1][ptBox.nCol] == nCIdx && m_aCells[ptBox.nRow + 1][ptBox.nCol] == nCIdx) ||
-           (m_aCells[ptBox.nRow][ptBox.nCol - 1] == nCIdx && m_aCells[ptBox.nRow][ptBox.nCol + 1] == nCIdx);
-  }
-  bool CanMoveOutsideCorral_(Point ptBox, uint8_t nCIdx) const {
-    return (m_aCells[ptBox.nRow - 1][ptBox.nCol] >= CIDX0 && m_aCells[ptBox.nRow + 1][ptBox.nCol] >= CIDX0 &&
-            m_aCells[ptBox.nRow - 1][ptBox.nCol] != nCIdx && m_aCells[ptBox.nRow + 1][ptBox.nCol] != nCIdx) ||
-          (m_aCells[ptBox.nRow][ptBox.nCol - 1] >= CIDX0 && m_aCells[ptBox.nRow][ptBox.nCol + 1] >= CIDX0 &&
-           m_aCells[ptBox.nRow][ptBox.nCol - 1] != nCIdx && m_aCells[ptBox.nRow][ptBox.nCol + 1] != nCIdx);
-  }
-  bool IntCanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT bitset<256>& btsBoxMark) const;//recursive
-  bool IntCanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT bitset<256>& btsBoxMark) const;//recursive
-  bool CanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const {
-    bitset<256> btsBoxMark; btsBoxMark.set(nRow * MAX_DIM + nCol);
-    return IntCanUnblockUD_(nRow, nCol, nCIdx, btsBoxMark);
-  }
-  bool CanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const {
-    bitset<256> btsBoxMark; btsBoxMark.set(nRow * MAX_DIM + nCol);
-    return IntCanUnblockLR_(nRow, nCol, nCIdx, btsBoxMark);
-  }
+  bool CanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT int64_t& llBoxes) const;
+  bool CanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT int64_t& llBoxes) const;
+  bool CalcLockedNonG_(uint8_t nCIdx, IN OUT int64_t& llExternalLocked) const;
+  void GetBoxNeighb_(Point ptBox, OUT uint8_t (&aCC)[4]) const;
+  //
   void InitBoxCell_(uint8_t nRow, uint8_t nCol, bool bC0);
   void AddCorral_(Point ptCell, uint8_t nCIdx);//helper
   void AddInnerCorral_(Point ptCell, uint8_t nCIdx) {
     AddCorral_(ptCell, nCIdx);          //may inc m_nBoxCount!
-    OnInnerCorralAdded_(); //immediately merge inner corral with others if possible
+    Point ptCellMerge = OnInnerCorralAdded_();
+    //recursevely merge inner corral with others if possible
+    if (ptCellMerge.nRow && ptCellMerge.nCol)
+      AddInnerCorral_(ptCellMerge, nCIdx);
   }
-  void OnInnerCorralAdded_();
-  bool IsPICorral_(uint8_t nCIdx) const;
+  Point OnInnerCorralAdded_();
+  bool IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) const;
   bool IsSingleCorral_() const;
 };

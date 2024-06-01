@@ -2,6 +2,26 @@
 #include "Corral.h"
 #include "Sokoban.h"
 
+bool CStageCorrals::NotSpace_(Point ptCell) const {
+	return HasBox_(ptCell) || m_Sokoban.IsWall(ptCell.nRow, ptCell.nCol);
+}
+bool CStageCorrals::IsDead_(Point ptCell) const {
+	return m_Sokoban.IsDeadPos(ptCell.nRow, ptCell.nCol);
+}
+bool CStageCorrals::IsWall_(Point ptCell) const {
+	return m_Sokoban.IsWall(ptCell.nRow, ptCell.nCol);
+}
+bool CStageCorrals::IsG_(Point ptCell) const {
+	return m_Sokoban.IsStorage(ptCell.nRow, ptCell.nCol);
+}
+bool CStageCorrals::IsNonCorralSpace_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const {
+	return !m_Sokoban.NotSpace(*m_pStage, nRow, nCol) && m_aCells[nRow][nCol] != nCIdx;
+}
+bool CStageCorrals::IsOtherCorralSpace_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx) const {
+	return IsNonCorralSpace_(nRow,nCol,nCIdx) && m_aCells[nRow][nCol] != CIDX0;
+}
+
+
 void CStageCorrals::Init(const Stage* pStage) {
 	m_pStage = pStage;
 	m_nBoxCount = m_nC0BoxCount = 0;
@@ -78,6 +98,8 @@ Corral CStageCorrals::GetCorral(uint8_t nCIdx) const {
 				crlRet.llBoxes |= 1ll << m_Sokoban.CellPos(ptBox);
 		}
 	}
+	if (nCIdx == m_nLastPICIdx)
+		crlRet.llBoxes |= m_llExternalLocked; //we MUST add external locked boxes for G-only corrals!
 	for (uint8_t nRow = 0; nRow < MAX_DIM; ++nRow) {
 		for (uint8_t nCol = 0; nCol < MAX_DIM; ++nCol) {
 			if (m_aCells[nRow][nCol] == nCIdx)
@@ -114,7 +136,7 @@ void CStageCorrals::AddCorral_(Point ptCell, uint8_t nCIdx){
 	const bool bC0 = nCIdx == CIDX0;
 	stack<Stage> stackStages;//~DFS
 	//prolog
-	assert(m_aCells[ptCell.nRow][ptCell.nCol] == 0);
+	assert(m_aCells[ptCell.nRow][ptCell.nCol] == CUNKN && !m_Sokoban.NotSpace(current, ptCell.nRow, ptCell.nCol));
 	m_aCells[ptCell.nRow][ptCell.nCol] = nCIdx;
 	//init boxes around, if any
 	InitBoxCell_(ptCell.nRow - 1, ptCell.nCol, bC0);
@@ -242,172 +264,404 @@ int8_t CStageCorrals::GetPICorral() {
 	}
 	//3. Find PI Corral for Corral0 boxes
 	for (uint8_t nCIdx = CIDX0 + 1; nCIdx <= m_nLastCIdx; ++nCIdx) { //go through Corral0 boxes
-		if (IsPICorral_(nCIdx))
+		m_nLastPICIdx = nCIdx;
+		int64_t llExternalLocked = 0;
+		if (IsPICorral_(nCIdx, llExternalLocked)) {
+			m_llExternalLocked = llExternalLocked;
 			return nCIdx;
+		}
 	}
 	return 0;//not found
 }
-void CStageCorrals::OnInnerCorralAdded_() {
-	Point ptCell;
-	//go recursevely through newly added boxes and add/merge neighbour Corrals! 
-	//m_nBoxCount grows after each AddInnerCorral_
-	for (uint8_t nBox = 0; nBox < m_nBoxCount; ++nBox) {
-		Point ptBox = m_aBoxes[nBox];
-		//can push box FROM unkn Corral to the current/last Corral
-		//from UP
-		if (m_aCells[ptBox.nRow - 1][ptBox.nCol] == CUNKN && m_aCells[ptBox.nRow + 1][ptBox.nCol] == m_nLastCIdx &&
-			m_Sokoban.IsSpace(ptBox.nRow - 1, ptBox.nCol) && !m_Sokoban.HasBox(*m_pStage, ptBox.nRow - 1, ptBox.nCol)) {
-			ptCell = ptBox; --ptCell.nRow;
-			AddInnerCorral_(ptCell, m_nLastCIdx);//MERGE to current inner Corral!
+//UDLR order
+void CStageCorrals::GetBoxNeighb_(Point ptBox, OUT uint8_t (&aCC)[4]) const {
+	const Point aCells[4]{ {uint8_t(ptBox.nRow - 1), ptBox.nCol}, {uint8_t(ptBox.nRow + 1), ptBox.nCol},
+                         {ptBox.nRow, uint8_t(ptBox.nCol - 1)}, {ptBox.nRow, uint8_t(ptBox.nCol + 1)} };
+
+	for (int nIdx = 0; nIdx < 4; ++nIdx) {
+		Point ptCell = aCells[nIdx];
+		uint8_t nCC = m_aCells[ptCell.nRow][ptCell.nCol];
+		if (nCC == CUNKN) {
+			if (m_Sokoban.IsWall(ptCell.nRow, ptCell.nCol))
+				nCC = CWALL;
+			else if (m_Sokoban.HasBox(*m_pStage, ptCell.nRow, ptCell.nCol))
+				nCC = CBOX;
 		}
-		//from DN
-		else if (m_aCells[ptBox.nRow + 1][ptBox.nCol] == CUNKN && m_aCells[ptBox.nRow - 1][ptBox.nCol] == m_nLastCIdx &&
-			m_Sokoban.IsSpace(ptBox.nRow + 1, ptBox.nCol) && !m_Sokoban.HasBox(*m_pStage, ptBox.nRow + 1, ptBox.nCol)) {
-			ptCell = ptBox; ++ptCell.nRow;
-			AddInnerCorral_(ptCell, m_nLastCIdx);
-		}
-		//from LT
-		if (m_aCells[ptBox.nRow][ptBox.nCol - 1] == CUNKN && m_aCells[ptBox.nRow][ptBox.nCol + 1] == m_nLastCIdx &&
-			m_Sokoban.IsSpace(ptBox.nRow, ptBox.nCol - 1) && !m_Sokoban.HasBox(*m_pStage, ptBox.nRow, ptBox.nCol - 1)) {
-			ptCell = ptBox; --ptCell.nCol;
-			AddInnerCorral_(ptCell, m_nLastCIdx);
-		}
-		//from RT
-		else if (m_aCells[ptBox.nRow][ptBox.nCol + 1] == CUNKN && m_aCells[ptBox.nRow][ptBox.nCol - 1] == m_nLastCIdx &&
-			m_Sokoban.IsSpace(ptBox.nRow, ptBox.nCol + 1) && !m_Sokoban.HasBox(*m_pStage, ptBox.nRow, ptBox.nCol + 1)) {
-			ptCell = ptBox; ++ptCell.nCol;
-			AddInnerCorral_(ptCell, m_nLastCIdx);
-		}
+		aCC[nIdx] = nCC;
 	}
 }
+Point CStageCorrals::OnInnerCorralAdded_() {
+	Point ptCell;
+	//go through all pushable boxes that have borders with last/new corral and an unkown one and merge them(recursively)!
+	//NB: m_nBoxCount grows after each AddInnerCorral_
+	for (uint8_t nBox = 0; nBox < m_nBoxCount; ++nBox) {
+		Point ptBox = m_aBoxes[nBox];
+		//cell codes for UP,DN,LT,RT squares around the box
+		uint8_t aCC[4];
+		GetBoxNeighb_(ptBox, aCC);
+		//box on the new corral's border is pushable-inside (after it is unblockable!) from the UNKN corral(?)->Merge!
+		//check TOP square
+		if (aCC[SB_DN] != CBOX && aCC[SB_DN] != CWALL && !m_Sokoban.IsDeadPos(ptBox.nRow+1, ptBox.nCol) &&
+			(aCC[SB_DN] == m_nLastCIdx || aCC[SB_LT] == m_nLastCIdx || aCC[SB_RT] == m_nLastCIdx) &&
+			(aCC[SB_UP] == CUNKN || aCC[SB_UP] == CBOX))
+		{ //got smtng to merge?
+			ptCell = ptBox; --ptCell.nRow;
+			if (aCC[SB_UP] == CBOX) {//check LR cells
+				uint8_t aCC2[4];
+				GetBoxNeighb_(ptCell, aCC2);
+				if (aCC2[2] == CUNKN && (aCC2[3] == CUNKN || aCC2[3] >= CIDX0))
+					--ptCell.nCol;
+				else if (aCC2[3] == CUNKN && aCC2[2] >= CIDX0)
+					++ptCell.nCol;
+				else
+					ptCell.nRow = ptCell.nCol = 0;//invalid
+			}
+			if (ptCell.nRow && ptCell.nCol)
+				return ptCell;
+		}
+		// BTM
+		if (aCC[SB_UP] != CBOX && aCC[SB_UP] != CWALL && !m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol) &&
+			(aCC[SB_UP] == m_nLastCIdx || aCC[SB_LT] == m_nLastCIdx || aCC[SB_RT] == m_nLastCIdx) && 
+			(aCC[SB_DN] == CUNKN || aCC[SB_DN] == CBOX)) 
+		{
+			ptCell = ptBox; ++ptCell.nRow;
+			if (aCC[SB_DN] == CBOX) {//check LR cells
+				uint8_t aCC2[4];
+				GetBoxNeighb_(ptCell, aCC2);
+				if (aCC2[2] == CUNKN && (aCC2[3] == CUNKN || aCC2[3] >= CIDX0))
+					--ptCell.nCol;
+				else if (aCC2[3] == CUNKN && aCC2[2] >= CIDX0)
+					++ptCell.nCol;
+				else
+					ptCell.nRow = ptCell.nCol = 0;//invalid
+			}
+			if (ptCell.nRow && ptCell.nCol)
+				return ptCell;
+		}
+		//LT
+		if (aCC[SB_RT] != CBOX && aCC[SB_RT] != CWALL && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol+1) &&
+			(aCC[SB_UP] == m_nLastCIdx || aCC[SB_DN] == m_nLastCIdx || aCC[SB_RT] == m_nLastCIdx) &&
+			(aCC[SB_LT] == CUNKN || aCC[SB_LT] == CBOX )) 
+		{
+			ptCell = ptBox; --ptCell.nCol;
+			if (aCC[SB_LT] == CBOX) {//check UD cells
+				uint8_t aCC2[4];
+				GetBoxNeighb_(ptCell, aCC2);
+				if (aCC2[0] == CUNKN && (aCC2[1] == CUNKN || aCC2[1] >= CIDX0))
+					--ptCell.nRow;
+				else if (aCC2[1] == CUNKN && aCC2[0] >= CIDX0)
+					++ptCell.nRow;
+				else
+					ptCell.nRow = ptCell.nCol = 0;//invalid
+			}
+			if (ptCell.nRow && ptCell.nCol)
+				return ptCell;
+		}
+		//RT
+		if (aCC[SB_LT] != CBOX && aCC[SB_LT] != CWALL && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol-1) &&
+			(aCC[SB_UP] == m_nLastCIdx || aCC[SB_DN] == m_nLastCIdx || aCC[SB_LT] == m_nLastCIdx) &&
+			(aCC[SB_RT] == CUNKN || aCC[SB_RT] == CBOX )) 
+		{
+			ptCell = ptBox; ++ptCell.nCol;
+			if (aCC[SB_RT] == CBOX) {//check UD cells
+				uint8_t aCC2[4];
+				GetBoxNeighb_(ptCell, aCC2);
+				if (aCC2[0] == CUNKN && (aCC2[1] == CUNKN || aCC2[1] >= CIDX0))
+					--ptCell.nRow;
+				else if (aCC2[1] == CUNKN && aCC2[0] >= CIDX0)
+					++ptCell.nRow;
+				else
+					ptCell.nRow = ptCell.nCol = 0;//invalid
+			}
+			if (ptCell.nRow && ptCell.nCol)
+				return ptCell;
+		}
+	}
+	return { 0,0 };//nothing to merge
+}
 
+//NOTE: any already processed Corrals are NOT-PI!
 // I-Corral is not NOT PI-Corral if
 // A) All boxes are G AND there is no free G inside!
-// B) if Box cannot be pushed inside CIdx(shown as 1), but can be pushed after 1+ boxes are pushed in corral0(shown as 1)
-//Example of blocked upper box 'b'
+// B) Border box is a "gate": can be moved outside CIdx (C0 OR in other non-PI Corral)
+// C) Box can be pushed inside CIdx from other (non-PI) Corral  
+// D) if Box cannot be pushed into the CIdx(shown as 2), but CAN be pushed after it is unblocked in C0/other Corral (shown as 1)
+//Example of un-blockable top box 'b'
 //1B1 1BB BB1
-//NbN	NbN	NbN
+//NbN	Nb1	1bN
 //?2?	?2?	?2?
-bool CStageCorrals::IsPICorral_(uint8_t nCIdx) const {
+
+bool CStageCorrals::IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) const {
 	bool bRet = false;//pessimistic
+	llExternalLocked = 0;
+
+	Stage temp;
+
 	for (uint8_t nBox = 0; nBox < m_nBoxCount; ++nBox) { //go through non-Corral0 boxes
+		int64_t llEL = 0;
 		Point ptBox = m_aBoxes[nBox];
+		uint8_t aCC[4];
+		GetBoxNeighb_(ptBox, aCC);
 		//get box that belongs to the corral
-		if (!HasCorralEdge_(ptBox, nCIdx))
+		if (aCC[SB_UP] != nCIdx && aCC[SB_DN] != nCIdx && aCC[SB_LT] != nCIdx && aCC[SB_RT] != nCIdx)
 			continue;
 		if(!m_Sokoban.IsStorage(ptBox.nRow, ptBox.nCol))
 			bRet = true;//non-G box
-
-		//cbx xbc ,x!=CIdx
-		//BbB BbB
-		if (CanMoveOutsideCorral_(ptBox, nCIdx)) //its a gate/ not an I-Corral; see "rear examples" below
+		//B. check if box is a gate/can be moved outside the nCIdx
+		if (IsNonCorralSpace_(ptBox.nRow - 1, ptBox.nCol, nCIdx) && IsNonCorralSpace_(ptBox.nRow + 1, ptBox.nCol, nCIdx)) {
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol)) {
+				//we need extra check if box would be deadlocked on push up...
+				//hopefully if extrnal boxes influence it will be picked up by Push2DDL stuff....
+				temp = *m_pStage;
+				temp.ptR = ptBox; ++temp.ptR.nRow;//its a space!
+				temp = m_Sokoban.PushUp(temp);
+				if (!m_Sokoban.IsFixedDeadLock(temp, SB_UP))
+					return false;
+			}
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow + 1, ptBox.nCol)) {
+				temp = *m_pStage;
+				temp.ptR = ptBox; --temp.ptR.nRow;//its a space!
+				temp = m_Sokoban.PushDown(temp);
+				if (!m_Sokoban.IsFixedDeadLock(temp, SB_DN))
+					return false;
+			}
+		}
+		if (IsNonCorralSpace_(ptBox.nRow, ptBox.nCol - 1, nCIdx) && IsNonCorralSpace_(ptBox.nRow, ptBox.nCol + 1, nCIdx)) {
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol - 1)) {
+				temp = *m_pStage;
+				temp.ptR = ptBox; ++temp.ptR.nCol;//its a space!
+				temp = m_Sokoban.PushLeft(temp);
+				if (!m_Sokoban.IsFixedDeadLock(temp, SB_LT))
+					return false;
+			}
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol + 1)) {
+				temp = *m_pStage;
+				temp.ptR = ptBox; --temp.ptR.nCol;//its a space!
+				temp = m_Sokoban.PushRight(temp);
+				if (!m_Sokoban.IsFixedDeadLock(temp, SB_RT))
+					return false;
+			}
+		}
+		//C. If box can be moved-in from another corral
+		//from TOP
+		if (aCC[SB_DN] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow + 1, ptBox.nCol) && IsOtherCorralSpace_(ptBox.nRow - 1, ptBox.nCol, nCIdx))
 			return false;
-		//???
-		//cbc
-		if (CanMoveInCorral_(ptBox, nCIdx))
-			continue;
-		//NOT PI-Corral if
-		// A) All boxes are G
-		// B) if Box cannot be pushed inside CIdx(shown as c) immediately, but can be after 1+ boxes are pushed in corral0(shown as 1)
-		//BTM EDGE  = nCIdx examples:
-		// B   BB BB 
-		//NbN Nb   bN
-		//?c? ?cN Nc?
-		// Also, possible that block B can be moved to unmerged Corral x, to unblock 'b' for push 1-2
-		//    NNN 
-		//   Bxx.... 
-		// NNbOOO 
-		//  ?cc 
-		//
-		// Another exotic example: to unblock box 'b' we need to push B inside other unmerged Corrals x,y), to unblock 'b' for push 1-2
-		//   O?O
-		//   xBy....
-		//  OObOOO
-		//   ?c?
-		//For the two examples above - we cannot treat Corral 2 as PI
-		if (m_aCells[ptBox.nRow + 1][ptBox.nCol] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow + 1, ptBox.nCol) && 
-			  m_aCells[ptBox.nRow - 1][ptBox.nCol] == CBOX) {
-			if (CanUnblockLR_(ptBox.nRow - 1, ptBox.nCol, nCIdx))
+		//from BTM
+		if (aCC[SB_UP] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol) && IsOtherCorralSpace_(ptBox.nRow + 1, ptBox.nCol, nCIdx))
+			return false;
+		//from LT
+		if (aCC[SB_RT] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol + 1) && IsOtherCorralSpace_(ptBox.nRow, ptBox.nCol - 1, nCIdx))
+			return false;
+		//from RT
+		if (aCC[SB_LT] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol - 1) && IsOtherCorralSpace_(ptBox.nRow, ptBox.nCol + 1, nCIdx))
+			return false;
+		//D.
+		//TOP cell is non-dead nCIdx cell, bottom is unblockable box in non-CIdx corral
+		//FIX: if it is locked - it must be added to the llExternalLocked boxes!!
+		if (aCC[SB_UP] == nCIdx && aCC[SB_DN] == CBOX && !m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol)) {
+			if (CanUnblockLR_(ptBox.nRow + 1, ptBox.nCol, nCIdx, llEL))
 				return false;
 		}
-		//TOP EDGE
-		if (m_aCells[ptBox.nRow - 1][ptBox.nCol] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol) &&
-			m_aCells[ptBox.nRow + 1][ptBox.nCol] == CBOX) {
-			if (CanUnblockLR_(ptBox.nRow + 1, ptBox.nCol, nCIdx))
+		//BTM
+		if (aCC[SB_DN] == nCIdx && aCC[SB_UP] == CBOX && !m_Sokoban.IsDeadPos(ptBox.nRow + 1, ptBox.nCol)) {
+			if (CanUnblockLR_(ptBox.nRow - 1, ptBox.nCol, nCIdx, llEL))
 				return false;
 		}
-		//RT EDGE
-		if (m_aCells[ptBox.nRow][ptBox.nCol+1] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol+1) &&
-			m_aCells[ptBox.nRow][ptBox.nCol-1] == CBOX) { 
-			if (CanUnblockUD_(ptBox.nRow, ptBox.nCol-1, nCIdx))
+		//LT
+		if (aCC[SB_LT] == nCIdx && aCC[SB_RT] == CBOX && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol - 1)) {
+			if (CanUnblockUD_(ptBox.nRow, ptBox.nCol + 1, nCIdx, llEL))
 				return false;
 		}
-		//LT EDGE
-		if (m_aCells[ptBox.nRow][ptBox.nCol - 1] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol - 1) &&
-			m_aCells[ptBox.nRow][ptBox.nCol + 1] == CBOX) { 
-			if (CanUnblockUD_(ptBox.nRow, ptBox.nCol + 1, nCIdx))
+		//RT
+		if (aCC[SB_RT] == nCIdx && aCC[SB_LT] == CBOX && !m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol + 1)) {
+			if (CanUnblockUD_(ptBox.nRow, ptBox.nCol - 1, nCIdx, llEL))
 				return false;
 		}
+		llExternalLocked |= llEL;
 	} //for nBox
+	//add any external boxes that locks Corral border boxes
+	//this is crucial for PIC DDL!!
 	if (!bRet) {
 		//we r here if all this is I-Corral with all G boxes on the border
 		//however, if there is a free G cell inside - we must return TRUE!
-		for (uint8_t nRow = 0; nRow < MAX_DIM; ++nRow) {
-			for (uint8_t nCol = 0; nCol < MAX_DIM; ++nCol) {
+		for (uint8_t nRow = 0; nRow < m_Sokoban.Dim().nRows; ++nRow) {
+			for (uint8_t nCol = 0; nCol < m_Sokoban.Dim().nCols; ++nCol) {
 				if (m_aCells[nRow][nCol] == nCIdx && m_Sokoban.IsStorage(nRow, nCol))
 					return true;
 			}
 		}
+		//FIX: if non-G non-border box is "locked" by Corral's G-boxes we still MUST to push inside PI-Corral to release this box!
+		// #G$ - LockedBox1!
+		//G..G
+		// #GG$ - LockedBox2!
+		//    $#
+		return CalcLockedNonG_(nCIdx, llExternalLocked);
 	}
-	return bRet;//good PI Corral!
+	return bRet;
 }
-bool CStageCorrals::IntCanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT bitset<256>& btsBoxMark) const {
-	assert(m_aCells[nRow][nCol] == CBOX);//debug
-	//must be a box reachable in C!=nCIdx
-	if (!HasOtherCorralEdge_({ nRow,nCol }, nCIdx))
-		return false;
+bool CStageCorrals::CalcLockedNonG_(uint8_t nCIdx, IN OUT int64_t& llExternalLocked) const {
+	bool bRet = false;
+	//Get all boxes connected to coral somehow
+	bitset<MAX_SPACES> btsConnected;
+	queue<Point> qConnected;
+	//first pass - boxes around corral border
+	uint8_t aBoxesPos[MAX_BOXES];
+	m_pStage->GetBoxesPos(aBoxesPos);
+	for (uint16_t nBox = 0; nBox < m_Sokoban.BoxCount(); ++nBox) {
+		Point ptBox = m_Sokoban.CellPoint(aBoxesPos[nBox]);
+		if (HasCorralEdge_(ptBox, nCIdx)) {
+			Point aPtUDLR[4] = { {uint8_t(ptBox.nRow - 1), ptBox.nCol}, {uint8_t(ptBox.nRow + 1), ptBox.nCol},
+													{ptBox.nRow, uint8_t(ptBox.nCol - 1)}, {ptBox.nRow, uint8_t(ptBox.nCol + 1)} };
+			for (Point ptCell : aPtUDLR) {
+				if (HasBox_(ptCell) && !HasCorralEdge_(ptCell, nCIdx)) {
+					if (!btsConnected.test(m_Sokoban.CellPos(ptCell))) {
+						btsConnected.set(m_Sokoban.CellPos(ptCell));
+						qConnected.push(ptCell);
+					}
+				}
+			}
+		}
+	} //for 1
+	//second pass - boxes around first pass
+	while (!qConnected.empty()) {
+		Point ptBox = qConnected.front(); qConnected.pop(); //Pop
+		Point aPtUDLR[4] = { {uint8_t(ptBox.nRow - 1), ptBox.nCol}, {uint8_t(ptBox.nRow + 1), ptBox.nCol},
+												{ptBox.nRow, uint8_t(ptBox.nCol - 1)}, {ptBox.nRow, uint8_t(ptBox.nCol + 1)} };
+		for (Point ptCell : aPtUDLR) {
+			if (HasBox_(ptCell) && !btsConnected.test(m_Sokoban.CellPos(ptCell)) && !HasCorralEdge_(ptCell, nCIdx)) {
+				btsConnected.set(m_Sokoban.CellPos(ptCell));
+				qConnected.push(ptCell); //recursion
+			}
+		}
+	}//while/for 2
+	//third pass - find ALL potentially locked among all "connected" boxes
+	bitset<MAX_SPACES> btsLocked;
+	for (uint16_t nBox = 0; nBox < m_Sokoban.BoxCount(); ++nBox) {
+		Point ptBox = m_Sokoban.CellPoint(aBoxesPos[nBox]);
+		if (btsConnected.test(m_Sokoban.CellPos(ptBox))) {
+			//check if box is >potentially< "locked" by (connected)boxes/walls OR deadPos!
+			Point aPtUDLR[4] = { {uint8_t(ptBox.nRow - 1), ptBox.nCol}, {uint8_t(ptBox.nRow + 1), ptBox.nCol},
+									{ptBox.nRow, uint8_t(ptBox.nCol - 1)}, {ptBox.nRow, uint8_t(ptBox.nCol + 1)} };
+			if ((NotSpace_(aPtUDLR[0]) || NotSpace_(aPtUDLR[1])) &&
+				(NotSpace_(aPtUDLR[2]) || NotSpace_(aPtUDLR[3]) || (IsDead_(aPtUDLR[2]) && IsDead_(aPtUDLR[3]))))
+				btsLocked.set(m_Sokoban.CellPos(ptBox));
+			else if ((NotSpace_(aPtUDLR[2]) || NotSpace_(aPtUDLR[3])) && (IsDead_(aPtUDLR[0]) && IsDead_(aPtUDLR[1])))
+				btsLocked.set(m_Sokoban.CellPos(ptBox));
+		}
+	}//for 3
+	//4th pass - find "loose" boxes among (potentially) connected AND locked
+	for (uint16_t nBox = 0; nBox < m_Sokoban.BoxCount(); ++nBox) {
+		Point ptBox = m_Sokoban.CellPoint(aBoxesPos[nBox]);
+		if (!btsLocked.test(m_Sokoban.CellPos(ptBox)))
+			continue;
+		Point aPtUDLR[4] = { {uint8_t(ptBox.nRow - 1), ptBox.nCol}, {uint8_t(ptBox.nRow + 1), ptBox.nCol},
+								{ptBox.nRow, uint8_t(ptBox.nCol - 1)}, {ptBox.nRow, uint8_t(ptBox.nCol + 1)} };
+		const int aCellPos[4]{ IsWall_(aPtUDLR[0]) ? 0 : m_Sokoban.CellPos(aPtUDLR[0]), 
+													 IsWall_(aPtUDLR[1]) ? 0 : m_Sokoban.CellPos(aPtUDLR[1]),
+													IsWall_(aPtUDLR[2]) ? 0 : m_Sokoban.CellPos(aPtUDLR[2]),
+													IsWall_(aPtUDLR[3]) ? 0 : m_Sokoban.CellPos(aPtUDLR[3]) };
+		//non-locked connected TOP box (NOTE: it can be actually still unpushable, but its TOO MUCH to check this...)
+		if (HasBox_(aPtUDLR[0]) && !btsLocked.test(aCellPos[0]) && btsConnected.test(aCellPos[0])) {
+			//we are still locked if at the bottom we have wall OR box which is locked OR corral 
+			if (IsWall_(aPtUDLR[1]) ||
+				( HasBox_(aPtUDLR[1]) && (btsLocked.test(aCellPos[1]) || !btsConnected.test(aCellPos[1])) )
+				);
+			else {
+				btsLocked.set(m_Sokoban.CellPos(ptBox), false);//unlock the box and start over!
+				nBox = (uint16_t)(-1);
+				continue;
+			}
+		}
+		//non-locked BTM box
+		if (HasBox_(aPtUDLR[1]) && !btsLocked.test(aCellPos[1]) && btsConnected.test(aCellPos[1])) {
+			//we are still locked if at the top we have wall OR box which is locked OR corral 
+			if (IsWall_(aPtUDLR[0]) ||
+				( HasBox_(aPtUDLR[0]) && (btsLocked.test(aCellPos[0]) || !btsConnected.test(aCellPos[0])) )
+				);
+			else {
+				btsLocked.set(m_Sokoban.CellPos(ptBox), false);//unlock the box and start over!
+				nBox = (uint16_t)(-1);
+				continue;
+			}
+		}
+		//non-locked LT box
+		if (HasBox_(aPtUDLR[2]) && !btsLocked.test(aCellPos[2]) && btsConnected.test(aCellPos[2])) {
+			//we are still locked if at the right we have wall OR box which is locked OR corral 
+			if (IsWall_(aPtUDLR[3]) ||
+				( HasBox_(aPtUDLR[3]) && (btsLocked.test(aCellPos[3]) || !btsConnected.test(aCellPos[3])) )
+				);
+			else {
+				btsLocked.set(m_Sokoban.CellPos(ptBox), false);//unlock the box and start over!
+				nBox = (uint16_t)(-1);
+				continue;
+			}
+		}
+		//non-locked RT box
+		if (HasBox_(aPtUDLR[3]) && !btsLocked.test(aCellPos[3]) && btsConnected.test(aCellPos[3])) {
+			//we are still locked if at the right we have wall OR box which is locked OR corral 
+			if (IsWall_(aPtUDLR[2]) ||
+				( HasBox_(aPtUDLR[2]) && (btsLocked.test(aCellPos[2]) || !btsConnected.test(aCellPos[2])) )
+				);
+			else {
+				btsLocked.set(m_Sokoban.CellPos(ptBox), false);//unlock the box and start over!
+				nBox = (uint16_t)(-1);
+				continue;
+			}
+		}
+	} //for 4
+	//5th/last pass - find really locked non-G AND add to corral boxes ALL LOCKED BOXES outside the corral
+	for (uint16_t nBox = 0; nBox < m_Sokoban.BoxCount(); ++nBox) {
+		Point ptBox = m_Sokoban.CellPoint(aBoxesPos[nBox]);
+		uint8_t nBoxPos = m_Sokoban.CellPos(ptBox);
+		if (btsLocked.test(nBoxPos)) {
+			llExternalLocked |= 1ll << nBoxPos;
+			if (!IsG_(ptBox))
+				bRet = true; //"good" PI Corral!
+		}
+	}//for 5
+	return bRet;//not found
+}
 
-	if (m_aCells[nRow][nCol-1] >= CIDX0 && m_aCells[nRow][nCol - 1] != nCIdx) {		//left is another corral
-		if (m_aCells[nRow][nCol + 1] >= CIDX0 && m_aCells[nRow][nCol + 1] != nCIdx)	//...and right is another corral
+bool CStageCorrals::CanUnblockLR_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT int64_t& llBoxes) const {
+	assert(m_aCells[nRow][nCol] == CBOX);//debug
+
+	int64_t llBox = 1ll << m_Sokoban.CellPos({ nRow,nCol });
+	if (llBoxes & llBox)
+		return false;//already checked!
+	llBoxes |= llBox;//add bit - if its inner corral's box its OK!
+
+	if (IsNonCorralSpace_(nRow, nCol-1, nCIdx)) {		//left is another corral
+		if (IsNonCorralSpace_(nRow, nCol + 1, nCIdx))	//...and right is another corral
 			return !m_Sokoban.IsDeadPos(nRow, nCol + 1) || !m_Sokoban.IsDeadPos(nRow, nCol - 1);
 		//else, check an obstacle on the right
-		if (m_aCells[nRow][nCol + 1] == CBOX && !btsBoxMark.test(nRow * MAX_DIM + nCol + 1)) {
-			btsBoxMark.set(nRow * MAX_DIM + nCol + 1);
-			return IntCanUnblockUD_(nRow, nCol + 1, nCIdx, btsBoxMark);
-		}
+		if (m_aCells[nRow][nCol + 1] == CBOX)
+			return CanUnblockUD_(nRow, nCol + 1, nCIdx, llBoxes);
 	} 
-	else if (m_aCells[nRow][nCol + 1] >= CIDX0 && m_aCells[nRow][nCol + 1] != nCIdx) {//only right is free
-		//check an obstacle on the left
-		if (m_aCells[nRow][nCol - 1] == CBOX && !btsBoxMark.test(nRow * MAX_DIM + nCol - 1)) {
-			btsBoxMark.set(nRow * MAX_DIM + nCol - 1);
-			return IntCanUnblockUD_(nRow, nCol - 1, nCIdx, btsBoxMark);
-		}
+	else if (IsNonCorralSpace_(nRow, nCol + 1, nCIdx)) {//only right is free
+		//check left box
+		if (m_aCells[nRow][nCol - 1] == CBOX)
+			return CanUnblockUD_(nRow, nCol - 1, nCIdx, llBoxes);
 	}
 	//else we cannot push this box L/R
 	return false;
 }
-bool CStageCorrals::IntCanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT bitset<256>& btsBoxMark) const {
-	assert(m_aCells[nRow][nCol] == CBOX);//debug
-	//must be a box reachable in C != nCIdx
-	if (!HasOtherCorralEdge_({ nRow,nCol }, nCIdx))
-		return false;
 
-	if (m_aCells[nRow - 1][nCol] >= CIDX0 && m_aCells[nRow-1][nCol] != nCIdx) { //top is free
-		if (m_aCells[nRow + 1][nCol] >= CIDX0 && m_aCells[nRow + 1][nCol] != nCIdx)		//...and btm is free
+bool CStageCorrals::CanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN OUT int64_t& llBoxes) const {
+	assert(m_aCells[nRow][nCol] == CBOX);//debug
+
+	if (IsNonCorralSpace_(nRow - 1,nCol, nCIdx)) { //top is free
+		if (IsNonCorralSpace_(nRow + 1, nCol, nCIdx))		//...and btm is free
 			return !m_Sokoban.IsDeadPos(nRow + 1, nCol) || !m_Sokoban.IsDeadPos(nRow - 1, nCol);
 		//else, check an obstacle on the bottom
-		if (m_aCells[nRow+1][nCol] == CBOX && !btsBoxMark.test((nRow+1) * MAX_DIM + nCol)) {
-			btsBoxMark.set((nRow+1) * MAX_DIM + nCol);
-			return IntCanUnblockLR_(nRow+1, nCol, nCIdx, btsBoxMark);
-		}
+		if (m_aCells[nRow+1][nCol] == CBOX)
+			return CanUnblockLR_(nRow+1, nCol, nCIdx, llBoxes);
 	}
-	else if (m_aCells[nRow + 1][nCol] >= CIDX0 && m_aCells[nRow + 1][nCol] != nCIdx) {//only btm is free
-		//check an obstacle on top
-		if (m_aCells[nRow-1][nCol] == CBOX && !btsBoxMark.test((nRow-1) * MAX_DIM + nCol)) {
-			btsBoxMark.set((nRow-1) * MAX_DIM + nCol);
-			return IntCanUnblockLR_(nRow-1, nCol, nCIdx, btsBoxMark);
-		}
+	else if (IsNonCorralSpace_(nRow + 1, nCol, nCIdx)) {//only btm is free
+		//check top box
+		if (m_aCells[nRow-1][nCol] == CBOX)
+			return CanUnblockLR_(nRow-1, nCol, nCIdx, llBoxes);
 	}
 	//else we cannot push this box U/D
 	return false;
 }
+

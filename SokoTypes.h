@@ -5,6 +5,13 @@
 #define MAX_BOXES  16
 #define MAX_SPACES 64
 #define MIN_RC0_SPACE 5 //min corral space wo guaranteed pull-deadlock
+#define FIXEDPC     5		//if box can bu pulled to more than this number it is treated as Free, otherwise - Fixed/Locked
+#define SOKOINF 0xFFFF
+//PUSH/PULL DIRECTIONS
+#define SB_UP  0
+#define SB_DN  1
+#define SB_LT  2
+#define SB_RT  3
 
 //COMMON TYPES
 struct Point {
@@ -20,9 +27,9 @@ struct Dimens {
 	uint16_t	nRows{ 0 };
 	uint16_t	nCols{ 0 };
 };
-struct Corral {//POD, 128b
+struct Corral {
 	int64_t llBoxes{ 0 };
-	int64_t llCells{ 0 };//free cells inside Corral, to ensure R is outside!!
+	int64_t llCells{ 0 };  //Corral cells; R must be is outside!!
 	Corral& Union(const Corral& clr2) {
 		llBoxes |= clr2.llBoxes;
 		llCells |= clr2.llCells;
@@ -31,14 +38,14 @@ struct Corral {//POD, 128b
 };
 struct Stage {//POD, 16b
 	Point			ptR;									//robot pos
-	uint16_t	nWeight{ 0xFFFF };		//sum of min-MDist from each box to the highest priority available storage!
+	uint16_t	nWeight{ 0xFFFF };		//priority(less is better) OR other indicators
 	uint32_t	nPIdx{ 0 };						//Parent Id/Idx
 	int64_t		llBoxPos{ 0 };				//bits for box pos 
 	//OPS
 	bool operator==(const Stage& rhs) const {
 		return ptR == rhs.ptR && llBoxPos == rhs.llBoxPos;
 	}
-	void GetBoxesPos(OUT uint8_t(&aBoxBPos)[16]) const {
+	void GetBoxesPos(OUT uint8_t(&aBoxBPos)[MAX_BOXES]) const {
 		if (!llBoxPos) {
 			assert(0);
 			return;
@@ -71,11 +78,6 @@ struct SokoCfg {
 	wstring         wsRpt_Path;          //default is null/Console
 	vector<wstring> vPuzzles;            //list of puzzles; >=1
 };
-//for RSM/DLM internal API
-struct FGStgInfo {
-	int64_t llStgPos{ 0 };
-	int64_t llRCells{ 0 };		//reachable cells by box pulling; just itself/1bit if fixed
-};
 
 //abstract/pure
 struct __declspec(novtable) IStageQueue abstract {
@@ -92,7 +94,7 @@ struct __declspec(novtable) IStageQueue abstract {
 	virtual void Push(const Stage& stage) = 0;
 };
 //abstract/pure
-struct __declspec(novtable) IBitMgr45 abstract {
-	virtual ~IBitMgr45() {}
-	virtual int64_t GetBits23() = 0;      //pack of 5 x (1+2*3)=7bits = 35 bits
-};
+//struct __declspec(novtable) IBitMgr45 abstract {
+//	virtual ~IBitMgr45() {}
+//	virtual int64_t GetBits23() = 0;      //pack of 5 x (1+2*3)=7bits = 35 bits
+//};

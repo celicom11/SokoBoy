@@ -144,10 +144,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="BitMgr45.cpp" />
     <ClCompile Include="CfgReader.cpp" />
     <ClCompile Include="Corral.cpp" />
     <ClCompile Include="DeadLockMgr.cpp" />
+    <ClCompile Include="FixedGoals.cpp" />
     <ClCompile Include="Hungarian1616.cpp" />
     <ClCompile Include="Initialize.cpp" />
     <ClCompile Include="main.cpp" />
@@ -160,10 +160,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BitMgr45.h" />
     <ClInclude Include="CfgReader.h" />
     <ClInclude Include="Corral.h" />
     <ClInclude Include="DeadLockMgr.h" />
+    <ClInclude Include="FixedGoals.h" />
     <ClInclude Include="Hungarian1616.h" />
     <ClInclude Include="Reporter.h" />
     <ClInclude Include="ReverseStages.h" />

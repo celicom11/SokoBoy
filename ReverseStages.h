@@ -12,6 +12,11 @@ struct RStageNode {
 	//extended pull-distances from each box to all free cells
 	DistExt				aDistExt[MAX_BOXES][MAX_SPACES];
 };
+struct SBoxInfo {
+	uint8_t nRPos{ 0 };
+	uint8_t nBoxPos{ 0 };
+};
+
 class CRStages {
 //DATA
   const Sokoban&			m_Sokoban;
@@ -26,7 +31,7 @@ public:
 	bool Init(uint16_t nDepth);
   uint16_t GetMinDist(const Stage& stage) const;		//aka Lower Bound estimation
 	bool CompletePath(IN OUT Stage& current, IN OUT IStageQueue* pSQClosed) const;	//Stage MUST be in one of the m_vCorralRS!
-	void GetReachableCellsEx(int64_t llBoxPos, IN OUT FGStgInfo& fginfo) const;
+	int64_t GetRBoxCells(int64_t llBoxes, IN OUT SBoxInfo (&aSBI)[FIXEDPC], bool bMinPulls) const;
 private:
 	bool CanPullUp_(const Stage& stage) const;
 	bool CanPullDown_(const Stage& stage) const;
@@ -38,10 +43,10 @@ private:
 	Stage PullLeft_(const Stage& stage) const;
 	uint16_t LBDist_(const RStageNode& rsl, const Stage& stage) const;
 	void InitRSNode_(IN OUT RStageNode& rsnode) const;
-	void CalcBoxDistEx_(const Stage& stage, Point ptBox, OUT DistExt* pDistExt) const;
+	void CalcBoxDistEx_(const Stage& stage, Point ptBox, OUT DistExt (&aDistExt)[MAX_SPACES]) const;
 	bool HasStage_(const RStageNode& rsnode, const Stage& stage) const;
 	bool IsBoxPushable_(const RStageNode& rsnode, uint8_t nRBox, uint8_t nBoxPos) const;
-	void GetReachableCells_(const Stage& stage, OUT vector<Point>& vCells) const;
+	int64_t GetRBoxCells_(int64_t llBoxes, IN OUT SBoxInfo(&aSBI)[FIXEDPC], IN OUT uint8_t (&aBEdges)[MAX_SPACES], bool bMinPulls) const;
 	//Tunneling
 	bool IsPullTunnelUP_(const Stage& stage) const;
 	bool IsPullTunnelDN_(const Stage& stage) const;

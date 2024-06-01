@@ -31,7 +31,7 @@ char Sokoban::GetCode(const Stage& stage, int nRow, int nCol) const {
 		return (IsStorage(nRow, nCol)?'*':'$');
 	if (IsStorage(nRow, nCol))
 		return '.';
-	if (IsSpace(nRow, nCol))
+	if (m_aField[nRow][nCol] != 0) //could be 4-"imposed wall"
 		return ' ';
 	return '#'; //wall
 }
@@ -98,12 +98,11 @@ bool Sokoban::Run() {
 		time_t tBegin{ 0 }, tEnd{ 0 };
 		m_Reporter.PC("\nSolving ").PC(_PathFileName(wsPPath)).PC(" with ").PC(m_Cfg.wsSearch).PEol();
 		time(&tBegin);
-		m_Reporter.PC("Initializing ... \n");
+		m_Reporter.PC("Initializing ...").PEol();
 		if (!Initialize_(wsPPath.c_str())) {
 			continue; //skip bad entry
 		}
-		Display(m_stInit);
-		if(m_stInit.nWeight!=0xFFFF)
+		if(m_stInit.nWeight!= SOKOINF)
 			m_Reporter.PC("Init Stage Distance: ").P(m_stInit.nWeight).PEol();
 		bool bRet = false;
 		Stage current = m_stInit;
@@ -135,41 +134,10 @@ bool Sokoban::Run() {
 	return true;
 }
 
-//OOOOOOOOOOOOOO
-//O  B   S  B  O
-bool Sokoban::IsDeadHWall(const Stage& temp, int nRow, int nCol) const {
-	uint16_t nLR = m_aDeadHWalls[nRow][nCol];
-	if (!nLR)
-		return false;//nothing to check
-	int nBoxes = 0, nStg = 0;
-	const int nL = nLR >> 8, nR = nLR & 0xFF;
-	for (int nX = nL; nX < nR; ++nX) {
-		if (IsStorage(nRow, nX))
-			++nStg;
-		if (HasBox(temp, nRow, nX))
-			++nBoxes;
-	}
-	return nStg < nBoxes;
-}
-//Vert wall check
-bool Sokoban::IsDeadVWall(const Stage& temp, int nRow, int nCol) const {
-	uint16_t nUD = m_aDeadVWalls[nRow][nCol];
-	if (!nUD)
-		return false;//nothing to check
-	int nBoxes = 0, nStg = 0;
-	const int nU = nUD >> 8, nD = nUD & 0xFF;
-	for (int nY = nU; nY < nD; ++nY) {
-		if (IsStorage(nY, nCol))
-			++nStg;
-		if (HasBox(temp, nY, nCol))
-			++nBoxes;
-	}
-	return nStg < nBoxes;
-}
 void Sokoban::UpdateStageWeight(IN OUT Stage& stage) const {
 	stage.nWeight = m_RSM.GetMinDist(stage);
-	if (stage.nWeight >= 0xFFFF - m_nBoxes)
-		stage.nWeight = 0xFFFF - m_DLM.GetFGLBits(stage);
+	if (stage.nWeight >= SOKOINF - m_nBoxes)
+		stage.nWeight = SOKOINF - m_DLM.NearestFGLSize(stage);
 }
 uint32_t Sokoban::Depth(const Stage& stage) const{
 	uint32_t nRet = 0;
@@ -182,35 +150,171 @@ uint32_t Sokoban::Depth(const Stage& stage) const{
 }
 uint16_t Sokoban::ParentWeight(const Stage& stage) const {
 	const Stage* pParent = m_pClosedStgs->Parent(stage);
-	return pParent ? pParent->nWeight : 0xFFFF;
+	return pParent ? pParent->nWeight : SOKOINF;
 }
-bool Sokoban::AreFixedGoals(const vector<int>& vStgIdx, OUT vector<Point>& vStgPts) const {
-	vStgPts.clear();
-	Stage stage;
-	for (int nIdx : vStgIdx) {
-		vStgPts.push_back(m_vStg[nIdx].pt);
-		stage.llBoxPos |= 1ll << CellPos(vStgPts.back());
-	}
+bool Sokoban::AreFixedGoals(const vector<Point>& vStgPts) const {
+	Stage stage,temp; stage.llBoxPos = CellsPos(vStgPts);
+	vector<Point> vRCells;
 	for (Point ptG : vStgPts) {
-		if (
-			(NotSpace(stage, ptG.nRow - 1, ptG.nCol) || NotSpace(stage, ptG.nRow + 1, ptG.nCol) || 
-				(IsDeadPos(ptG.nRow - 1, ptG.nCol) && IsDeadPos(ptG.nRow + 1, ptG.nCol)) ) &&
-			(NotSpace(stage, ptG.nRow, ptG.nCol - 1) || NotSpace(stage, ptG.nRow, ptG.nCol + 1) || 
-				(IsDeadPos(ptG.nRow, ptG.nCol- 1 ) && IsDeadPos(ptG.nRow, ptG.nCol + 1)) )
-			)
-			continue;//~static DL
-		//else
-		if (!NotSpace(stage, ptG.nRow - 1, ptG.nCol) && !NotSpace(stage, ptG.nRow - 2, ptG.nCol))
+		//check if G push is valid/not a DL
+		bool bCanPush = false;
+		//UP/DN
+		if (!NotSpace(stage, ptG.nRow - 1, ptG.nCol) && !NotSpace(stage, ptG.nRow + 1, ptG.nCol)) {
+			//UP
+			if (!IsDeadPos(ptG.nRow - 1, ptG.nCol)) {//~CanPushUp
+				stage.ptR = ptG;stage.ptR.nRow++; 
+				temp = PushUp(stage);
+				if (!m_DLM.IsStaticDeadLock(temp, SB_UP) && (IsStorage(ptG.nRow - 1, ptG.nCol) || CanPushAnyBox_(temp))) {
+					//check the corral size
+					GetReachableCells(stage, vRCells);
+					if (vRCells.size() >= MIN_RC0_SPACE) //R could be there?
+						bCanPush = true;//box is not fixed
+				}
+			}
+			//DN
+			if (!bCanPush && !IsDeadPos(ptG.nRow + 1, ptG.nCol)) {//~CanPushDown
+				stage.ptR = ptG; stage.ptR.nRow--; 
+				temp = PushDown(stage);
+				if (!m_DLM.IsStaticDeadLock(temp, SB_DN) && (IsStorage(ptG.nRow+1, ptG.nCol) || CanPushAnyBox_(temp))) {
+					//last check: corral' size
+					GetReachableCells(stage, vRCells);
+					if (vRCells.size() >= MIN_RC0_SPACE) //R could be there?
+						bCanPush = true;//box is not fixed
+				}
+			}
+		}
+		//LT/RT
+		if (!bCanPush && !NotSpace(stage, ptG.nRow, ptG.nCol - 1) && !NotSpace(stage, ptG.nRow, ptG.nCol + 1)) {
+			//LT
+			if (!IsDeadPos(ptG.nRow, ptG.nCol - 1)) {//~CanPushLeft
+				stage.ptR = ptG; stage.ptR.nCol++;
+				temp = PushLeft(stage);
+				if (!m_DLM.IsStaticDeadLock(temp, SB_LT) && (IsStorage(ptG.nRow, ptG.nCol-1) || CanPushAnyBox_(temp))) {
+					//check the corral size
+					GetReachableCells(stage, vRCells);
+					if (vRCells.size() >= MIN_RC0_SPACE) //R could be there?
+						bCanPush = true;//box is not fixed
+				}
+			}
+			//RT
+			if (!bCanPush && !IsDeadPos(ptG.nRow, ptG.nCol + 1)) {//~CanPushRight
+				stage.ptR = ptG; stage.ptR.nCol--;
+				temp = PushRight(stage);
+				if (!m_DLM.IsStaticDeadLock(temp, SB_RT) && (IsStorage(ptG.nRow, ptG.nCol+1) || CanPushAnyBox_(temp))) {
+					//check the corral size
+					GetReachableCells(stage, vRCells);
+					if (vRCells.size() >= MIN_RC0_SPACE) //R could be there?
+						bCanPush = true;//box is not fixed
+				}
+			}
+		}
+		if (bCanPush) {
+			//check if box can be pulled; if not its a Pull DL!
+			if (!IsWall(ptG.nRow - 1, ptG.nCol) && !NotSpace(stage, ptG.nRow - 2, ptG.nCol))
 				return false;
-		if (!NotSpace(stage, ptG.nRow + 1, ptG.nCol) && !NotSpace(stage, ptG.nRow + 2, ptG.nCol))
-			return false;
-		if (!NotSpace(stage, ptG.nRow, ptG.nCol - 1) && !NotSpace(stage, ptG.nRow, ptG.nCol - 2))
-			return false;
-		if (!NotSpace(stage, ptG.nRow, ptG.nCol + 1) && !NotSpace(stage, ptG.nRow, ptG.nCol + 2))
-			return false;
+			if (!IsWall(ptG.nRow + 1, ptG.nCol) && !NotSpace(stage, ptG.nRow + 2, ptG.nCol))
+				return false;
+			if (!IsWall(ptG.nRow, ptG.nCol - 1) && !NotSpace(stage, ptG.nRow, ptG.nCol - 2))
+				return false;
+			if (!IsWall(ptG.nRow, ptG.nCol + 1) && !NotSpace(stage, ptG.nRow, ptG.nCol + 2))
+				return false;
+			//else - G cannot be pulled=> fixed!
+		}
 	}
 	return true;
 }
+bool Sokoban::CanPushAnyBox_(const Stage& stage) const {
+	Stage temp;
+	vector<Point> vRCells;
+	GetReachableCells(stage, vRCells);
+	for (Point ptCell : vRCells) {
+		//UP
+		temp = stage; temp.ptR = ptCell;
+		if (CanPushUp(temp)) {
+			temp = PushUp(temp);
+			if (!m_DLM.IsStaticDeadLock(temp, SB_UP))
+				return true;
+		}
+		//DN
+		temp = stage; temp.ptR = ptCell;
+		if (CanPushDown(temp)) {
+			temp = PushDown(temp);
+			if (!m_DLM.IsStaticDeadLock(temp, SB_DN))
+				return true;
+		}
+		//LT
+		temp = stage; temp.ptR = ptCell;
+		if (CanPushLeft(temp)) {
+			temp = PushLeft(temp);
+			if (!m_DLM.IsStaticDeadLock(temp, SB_LT))
+				return true;
+		}
+		//RT
+		temp = stage; temp.ptR = ptCell;
+		if (CanPushRight(temp)) {
+			temp = PushRight(temp);
+			if (!m_DLM.IsStaticDeadLock(temp, SB_RT))
+				return true;
+		}
+	}
+	return false;
+}
+void Sokoban::GetReachableCells(const Stage& stage, OUT vector<Point>& vCells) const {
+	vCells.clear();
+	Stage temp, current = stage;
+	queue<Stage> queueStages;//BFS
+	//prolog
+	int64_t llAttended = 1ll << CellPos(stage.ptR), llNewPt = 0;
+	vCells.push_back(stage.ptR);
+	while (1) {
+		//UP
+		if (CanWalkUp(current)) {
+			temp = WalkUp(current);
+			llNewPt = 1ll << CellPos(temp.ptR);
+			if (0==(llAttended & llNewPt)) {
+				llAttended |= llNewPt;		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+		//LT
+		if (CanWalkLeft(current)) {
+			temp = WalkLeft(current);
+			llNewPt = 1ll << CellPos(temp.ptR);
+			if (0 == (llAttended & llNewPt)) {
+				llAttended |= llNewPt;		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+		//DN
+		if (CanWalkDown(current)) {
+			temp = WalkDown(current);
+			llNewPt = 1ll << CellPos(temp.ptR);
+			if (0 == (llAttended & llNewPt)) {
+				llAttended |= llNewPt;		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+		//RT
+		if (CanWalkRight(current)) {
+			temp = WalkRight(current);
+			llNewPt = 1ll << CellPos(temp.ptR);
+			if (0 == (llAttended & llNewPt)) {
+				llAttended |= llNewPt;		//new robot pos
+				queueStages.push(temp);
+				vCells.push_back(temp.ptR);
+			}
+		}
+
+		if (queueStages.empty())
+			break; //done
+		current = queueStages.front();
+		queueStages.pop();
+	}//while
+}
+
 
 
 

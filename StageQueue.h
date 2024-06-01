@@ -131,14 +131,14 @@ public:
 	void Push(const Stage& stage) override {
 		Stage stgNew = stage;
 		m_Sokoban.UpdateStageWeight(stgNew);
-		if (m_Sokoban.Cfg().nDFS_MaxDepth && m_Sokoban.Cfg().nDFS_MaxDepth < m_Sokoban.Depth(stage) + min((int)stgNew.nWeight,20))
+		if (m_Sokoban.Cfg().nDFS_MaxDepth && m_Sokoban.Cfg().nDFS_MaxDepth < m_Sokoban.Depth(stage))
 			return; //cutoff!
 		if (stgNew.nWeight > m_Sokoban.ParentWeight(stage)+4)
 			return;//cutoff 2!
 		uint32_t nDec = (uint32_t)m_vNewStages.size();
 		for (;nDec; --nDec) {
 			const Stage& stg = m_vNewStages[nDec - 1];
-			if (stg.nWeight > stgNew.nWeight)
+			if (stg.nWeight >= stgNew.nWeight)
 				break;
 		}
 		m_vNewStages.insert(m_vNewStages.begin()+ nDec, stgNew);

@@ -2,7 +2,6 @@
 #include "Sokoban.h"
 #include "Corral.h"
 #include "StageQueue.h"
-
 //
 bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 	uint32_t nQS = 0;
@@ -16,12 +15,45 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 
 	do
 	{
-		//DEBUG
-		//if (HasBox(current, 8, 1)) {
-		// __debugbreak();
-		//}
+#if 0//_DEBUG
+	static Point aPts[] {
+		{1,4},
+		{2,7},
+		{3,2},{3,5},{3,7},
+		{4,6},
+		{5,2},
+		{7,3},{7,4}
+	};
 
-		if (m_Cfg.nRpt_SQInc && abs((int)(nQS - pSQ->Size())) >= m_Cfg.nRpt_SQInc) {
+/* this must be a DeadPIC!
+	417x 484?
+##########
+#   $@...#
+## #...* #
+# $ .$#*##
+#   # $  #
+# $## #  #
+#     ## #
+## $$#   #
+#      # #
+##########
+*/
+	bool bBrk = true;
+	//current.llBoxPos == 10213366471934016ll;
+	for (const Point& pt : aPts) {
+		if (!HasBox(current, pt.nRow, pt.nCol)) {
+			bBrk = false;
+			break;
+		}
+	}
+	if (bBrk) {
+			m_Reporter.PC(" >>>>>DEBUG: ").PEol();
+			Display(current);
+			m_Reporter.PC(" QS: ").P(nQS).PC(" ALL: ").P(m_pClosedStgs->Size()).PC(" DEPTH: ").P(Depth(current)).PC(" DDLs: ").P(m_DLM.DDLCount()).PEol();
+	}
+#endif
+
+		if (m_Cfg.nRpt_SQInc && (m_Cfg.nRpt_SQInc == 1 || abs((int)(nQS - pSQ->Size())) >= m_Cfg.nRpt_SQInc)) {
 			Display(current);
 			m_Reporter.PC("DST: ");
 			if (current.nWeight < 0xFFFF)
@@ -35,7 +67,9 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 		uint8_t nCIdx = sc.GetPICorral();
 		bool bPushed = false;
 		//if on push an existing DDL PIC is created, latter needs to be merged with the current PIC w/o the pushed box!
-		Corral crlDDL;
+		DeadPIC dpic;
+		if (!nCIdx)
+			dpic.Disable();
 		//3.Pushing
 		for (uint8_t nBox = 0; nBox < sc.C0BoxCount(); ++nBox) {
 			Point ptBox = sc.GetBox(nBox);
@@ -47,7 +81,7 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				while (IsTunnelPos_UP(temp.ptR.nRow, temp.ptR.nCol) && CanPushUp(temp)) {
 					temp = PushUp(temp);
 				}
-				if (!IsTunnelPos_UP(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock_UP(temp, crlDDL)) {
+				if (!IsTunnelPos_UP(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_UP, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
 						temp.nPIdx = nPIdx;
@@ -63,7 +97,7 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				while (IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol) && CanPushLeft(temp)) {
 					temp = PushLeft(temp);
 				}
-				if (!IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock_LT(temp, crlDDL)) {
+				if (!IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_LT, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
 						temp.nPIdx = nPIdx;
@@ -79,7 +113,7 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				while (IsTunnelPos_DN(temp.ptR.nRow, temp.ptR.nCol) && CanPushDown(temp)) {
 					temp = PushDown(temp);
 				}
-				if (!IsTunnelPos_DN(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock_DN(temp, crlDDL)) {
+				if (!IsTunnelPos_DN(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_DN, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
 						temp.nPIdx = nPIdx;
@@ -95,7 +129,7 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				while (IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol) && CanPushRight(temp)) {
 					temp = PushRight(temp);
 				}
-				if (!IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock_RT(temp, crlDDL)) {
+				if (!IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_RT, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
 						temp.nPIdx = nPIdx;
@@ -104,9 +138,20 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				}
 			}
 		}
-		if (nCIdx && !bPushed) { //new dead PICorral/DDL!
+		if (nCIdx && !bPushed ) { //new dead PICorral/DDL!
 			Corral crlDDLNew = sc.GetCorral(nCIdx);
-			if (m_Cfg.bRpt_PIC_Merge && crlDDLNew.llBoxes != (crlDDLNew.llBoxes | crlDDL.llBoxes)) {
+			if (_Popcnt64(crlDDLNew.llBoxes | dpic.llBoxes) < m_nBoxes) {
+#if 0//_DEBUG
+				//if (crlDDLNew.llBoxes == 0x0000102000000000) {
+				m_Reporter.PC("New PI-Corrals DDL").PEol();
+				Display(current);
+				m_Reporter.PEol();
+				crlDDLNew.llBoxes |= dpic.llBoxes;
+				crlDDLNew.llCells |= dpic.llCells;
+				DisplayCorral(current.ptR, crlDDLNew);
+				//}
+#endif
+			/*if (m_Cfg.bRpt_PIC_Merge && crlDDLNew.llBoxes != (crlDDLNew.llBoxes | crlDDL.llBoxes)) {
 				Display(current);
 				m_Reporter.PC("DST: ");
 				if (pSQ->Top().nWeight < 0xFFFF)
@@ -116,10 +161,13 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				m_Reporter.PC("Merging PI Corrals").PEol();
 				DisplayCorral(current.ptR, crlDDLNew);
 				DisplayCorral(current.ptR, crlDDL);
+			}*/
+				m_DLM.AddDeadPIC(crlDDLNew, dpic);
+				//if (!m_DLM.IsDDL(current)) {
+				//	_ASSERT(0);
+				//}
 			}
-			m_DLM.AddDeadPIC(crlDDLNew.Union(crlDDL));
 		}
-		//because of DDLs, check if parent node is already dead
 		while (1) {
 			if (!pSQ->IsEmpty()) {
 				current = pSQ->Pop();
@@ -127,7 +175,8 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 					m_RSM.CompletePath(current, m_pClosedStgs);
 					return true;
 				}
-				if (m_DLM.IsDeadPIC(current))
+				//because of DDLs, check if next node becomes DL!
+				if (m_DLM.IsDDL(current))
 					continue;//prunned by DDL!
 				m_pClosedStgs->Push(current);
 				nPIdx = m_pClosedStgs->Size();//1 based!
