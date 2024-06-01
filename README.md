@@ -87,7 +87,7 @@ See the details/terms in "Sokoban: Solving Techniques,..." and "Notes on Impleme
 - DDLs: count of the Dynamic DeadLocks
 ## Puzzles directory
 Contains various puzzles/levels taken from public sources and which are used for the Sokoboy testing. Current version can solve easily most of the levels there except of the *6170_moves_more* from https://sokoban-max-moves.herokuapp.com/ 
-- Sub-dir *sokhard* contains a subset of the Lee J. Haywood collection https://www.sokobanonline.com/play/web-archive/lee-j-haywood/sokhard that fits Sokoboy's size/number of boxes restricitons.
+- Sub-dir **sokhard** contains a subset of the Lee J. Haywood collection https://www.sokobanonline.com/play/web-archive/lee-j-haywood/sokhard that fits Sokoboy's size/number of boxes restricitons.
 ## How to Contribute
 As for any new/not-well-tested software, any suggestions, requests, bug findings, etc. are **VERY WELCOME**! Modifying/extending current code could be done with the standard GitHub forking/pulling [workflow](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project).
 
@@ -120,9 +120,9 @@ Another important note is that Sokoboy searches only for min-pushes optimized so
 ### Static Deadlocks
 At the beginning, I tried to find/prepare a decent database of all possible (at least) 4x4 size Deadlocks before realizing it would be rather too big and checking every stage against it would noticeably slow down the searching. Next attempt was to use pre-calculated 3x3 static deadlocks on top of 2x3 deadlock tables. Currently, Sokoboy uses a simple algorithm for a detection of "Chain of Locked Boxes" (no boxes can be pushed to a valid square). Static Deadlock tables are removed.
 ### Dead Cells/Walls
-- The "dead wall" is a wall with two blocked ends:
-  '\#         \#'  
-  '\####...###'  
+- The "dead wall" is a wall with two blocked ends:  
+  `#        #`  
+  `####...###`  
 - If there are no any goal/storage cells near that "wall" all cells are treated/saved as "dead" - no boxes can be placed there.
 - If there is a 1+ goal, the algorithm still remembers these "walls" and prohibits pushing to the wall's cells more boxes than the number of the goals there. **Note:** This only partially compensates the absence of the dynamic "dead squares" recalculation done by RollinStone's solver when a box reaches the "fixed" goal - tobe added to Sokoboy soon.    
 ### PI-Corrals/Merging
