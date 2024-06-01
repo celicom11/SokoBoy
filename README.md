@@ -98,7 +98,7 @@ Imho, the most fundamental and comprehensive work I have found so far was the do
 Here is a list terms and the key approaches names with (*)/comments if they are used in the SokoBoy. The detailed of description of these terms can be found in the links/papers provided below:
 - Moves/Pushes Parity (invariant).
 - Breadth First Search/BFS; Depth First Search/DFS, Iterative Deepening Depth-First Search/IDDFS.  (*, IDDFS is not implemented in SokoBoy)
-- Tunneling/Macromoves (* SokoBoy implements Tunneling as described in [[sboYass]] and other sources.
+- Tunneling/Macromoves (* SokoBoy implements Tunneling as described in [[sboYass]](#4) and other sources.
 - Goal Parking Order/GPO.
 - Push/Move Ordering, Inertia Move. 
 - Deadlock/Deadlocks Table Database. (*, SokoBoy builds DeadLocks dynamically on top of static deadlocks using PI-Corrals)
