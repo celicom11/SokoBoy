@@ -19,13 +19,13 @@ Bad news is that there is a small static _ReadAllFiles method to read all files 
  ### Limitations
   - Puzzle field can have **maximum 16 cells** in either X/Y directions (including borders!).
   - Number of free (not walls) spaces **cannot exceed 64**.
-  These limitations are impeded by the current implementation - sorry for the inconvenience. Only a few puzzles from the known large sets like a Microban, Original, etc. would fit these limits. however, a great number of interesting puzzles from great SokobanOnline's collections like IonicCatalyst***, etc. will perfectly fit.
+  These limitations are impeded by the current implementation - sorry for the inconvenience. Only a few puzzles from the known large sets like a Microban, Original, etc. fit these limits. However, a great number of interesting puzzles from great SokobanOnline's collections like IonicCatalyst***, etc. will perfectly fit.
  ### Configuration
   Use SokoBoy.cfg from this repo as a template. The config file should be located in the folder where SokoBoy app runs. Config contains: 
   - _Comments_: any line started with ';' may contain arbitrary text. Comments are also allowed after Key=Value pairs.
   - _PuzzlePath_ ={full or relative path to one or more puzzle files}. Wildcards */? are allowed in accordance to FindFirstFile/FindNextFile Win API.
-  - _Search_ ={DFS|BFS|AStar} . For easy puzzles use BFS which gives an optimal/minimal push count solution. For complicated, use AStar - it creates a sub-optimal solution within a reasonable time (but not always!). DFS is not recommended/to be elaborated/tested/tuned.
-  - _RSM_Depth_ = 0(default/auto) or a positive number that defines **a depth of the Reverse-Pull-Tree** (aka a radius of the **Reverse Sphere**) which is used by the AStar/DFS algorithms. For complex puzzles, overriding the default parameter is advised if better timing/solution is desired.
+  - _Search_ ={DFS|BFS|AStar} . For easy puzzles use BFS which gives an optimal/minimal push count solution. For complicated, use AStar - it creates a sub-optimal solution within a reasonable time (but not always!). DFS is not recommended/not working well yet.
+  - _RSM_Depth_ = 0(default/auto) or a positive number that defines **a depth of the Reverse-Pull-Tree** (aka a radius of the **Reverse Sphere**) which is used by the AStar/DFS algorithms. _RSM_Depth_ = 1 is the best for the most of the levels. For complex puzzles though it could be increased to get some reasonable number of pull/reversed stages, but the 10,000+ nodes will slow down the search.
   - _RSM_GBRelax_ = {0|1(default)|2}. Number of GoalBox removals for LBE heuristic pre-calculations. 2 is NOT yet implemented, 0 - is not recommended, but it is kept for testing reasons.
   - _DFS_MaxDepth_ = 0(default. no limit), or a positive limit/cutoff for a DFS tree depth. Should be slightly above presumed minimal/optimal number of pushes in the puzzle solution. Again, at the moment DFS is not ready to compete with BFS/A* in most cases.
   - Rpt_Sol={1|0} - output or not the solution file. If 1 and the solution is found, the output file will be written to the puzzle's location/folder as a {puzzle_file_name}_{Search}.txt .
@@ -86,8 +86,8 @@ See the details/terms in "Sokoban: Solving Techniques,..." and "Notes on Impleme
 - DEPTH: depth of the current stage/node.
 - DDLs: count of the Dynamic DeadLocks
 ## Puzzles directory
-Contains various puzzles/levels taken from public sources and which are used for the Sokoboy testing. Current version can solve easily most of the levels there except of the *6170_moves_more* from https://sokoban-max-moves.herokuapp.com/ 
-- Sub-dir **sokhard** contains a subset of the Lee J. Haywood collection https://www.sokobanonline.com/play/web-archive/lee-j-haywood/sokhard that fits Sokoboy's size/number of boxes restricitons.
+Contains various puzzles/levels taken from public sources and which are used for the Sokoboy testing. Current version can quickly solve most of the levels there. Really hard one,for example, is *6170_moves_more* from https://sokoban-max-moves.herokuapp.com/, but with recent performance improvements it took 1135 seconds to find 1474 pushes to solve it. 
+- Sub-dir **sokhard** contains a subset of the Lee J. Haywood collection https://www.sokobanonline.com/play/web-archive/lee-j-haywood/sokhard that fits Sokoboy's size/number of boxes restricitons. The most hard/time-consuming there are: 112-Catalina(1307s), 110-Antonia(447s), 109-Terra (144s), 121-Gerrilyn (138s), 120-Heulwen (134s). 112-Catalina to be investigated.
 ## How to Contribute
 As for any new/not-well-tested software, any suggestions, requests, bug findings, etc. are **VERY WELCOME**! Modifying/extending current code could be done with the standard GitHub forking/pulling [workflow](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project).
 
@@ -107,8 +107,8 @@ Here is a list terms and the key approaches names with (*)/comments if they are 
 - Relevance Cuts. [[Jun99]](#1)
 - Lower Bound Estimation (of the distance between Sokoban stages)/LBE, [[Jun99]](#1),[[pdb]](#5)) (*, SokoBoy has a custom LBE heuristic).
 - Hungarian method for Assignment/Graph perfect bipartite problems (*, Sokoboy uses adapted impl of [[AL]](#6) algorithm for LBE/A**).
-- Perfect Matching - Sokoboy has a naive/brute-force algorithm to check if goals can be filled by the given set of boxes.
-- Nearest Neighbor Search(NNS) - again, brute-force algorithm for finding nearestone of the precalculated Fixed-Goals configuration nearest (in Hamming distance) to the given stage. TODO:  Locality Sensitive Hashing/Min-Hash, etc.
+- Perfect Matching - (*Sokoboy uses standard Kuhn's algorithm).
+- Nearest Neighbor Search(NNS) - again, brute-force algorithm for finding nearest one of the precalculated Fixed-Goals configuration nearest (in Hamming distance) to the given stage. TODO:  Locality Sensitive Hashing/Min-Hash, etc.
   
 ## Notes on SokoBoy implementation
 ### General
