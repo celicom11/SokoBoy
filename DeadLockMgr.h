@@ -38,6 +38,7 @@ struct DeadPIC {
 //DATA
 	int64_t						llBoxes{ 0 };			//DDL boxes
 	int64_t						llCells{ 0 };			//Corral cells; R must be is outside!!
+	int64_t						llBoxMask{ 0 };		//Boxes+Cells with G (TEST)
 	vector<Push2DDL>	vP2DLs;						//empty for SDPIC
 //ATTS
 	bool IsValid() const { return llCells != ~0ll;}
@@ -61,6 +62,7 @@ public:
   ~CDLMgr() = default;
 //ATTS
 	uint32_t DDLCount() const { return (uint32_t)m_vDeadPICs.size(); }
+	uint32_t FGSCount() const { return m_FGs.GetCount(); }
 	uint16_t NearestFGLSize(const Stage& stage) const {
 		return m_FGs.NearestFGLSize(stage);
 	}

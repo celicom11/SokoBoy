@@ -1,14 +1,18 @@
 #pragma once
-//simple container wrappers
+class Sokoban;
+
+//std container wrappers
 class SQVec : public IStageQueue {
-  vector<Stage>   m_vStages;
+	const Sokoban& m_Sokoban;		//field/precalcs
+  vector<Stage>  m_vStages;
 public:
-  SQVec() = default;
+  SQVec(const Sokoban& sokoban) :m_Sokoban(sokoban) {};
   ~SQVec() = default;
 //IStageQueue
 	bool IsEmpty() const override { return m_vStages.empty(); }
 	uint32_t Size() const override { return (uint32_t)m_vStages.size(); }
 	bool HasStage(const Stage& stage) const override {
+		//CTimeProfiler tp("SQVec::HasStage", m_Sokoban.TPC());
 		return std::find(m_vStages.begin(), m_vStages.end(), stage) != m_vStages.end();
 	}
 	void Clear() override { m_vStages.clear(); }
@@ -25,6 +29,43 @@ public:
 	}
 	const Stage* Parent(const Stage& stage) const override {
 		if (stage.nPIdx <= 0 || stage.nPIdx - 1 >= m_vStages.size()) 
+			return nullptr;
+		return &m_vStages[stage.nPIdx - 1];
+	}
+};
+class SQVecEx : public IStageQueue {
+	const Sokoban& m_Sokoban;		//field/precalcs
+	vector<Stage>  m_vStages;
+	unordered_set<Stage, Stage::HashFunction> m_usetStages;
+public:
+	SQVecEx(const Sokoban& sokoban) :m_Sokoban(sokoban) {};
+	~SQVecEx() = default;
+	//IStageQueue
+	bool IsEmpty() const override { return m_vStages.empty(); }
+	uint32_t Size() const override { return (uint32_t)m_vStages.size(); }
+	bool HasStage(const Stage& stage) const override {
+		//return std::find(m_vStages.begin(), m_vStages.end(), stage) != m_vStages.end();
+		return m_usetStages.find(stage) != m_usetStages.end();
+	}
+	void Clear() override { 
+		m_vStages.clear(); 
+		m_usetStages.clear();
+	}
+	const Stage& Top() const override {
+		return m_vStages.back();
+	}
+	Stage Pop() override {
+		Stage ret = m_vStages.back();
+		m_vStages.pop_back();
+		m_usetStages.erase(ret);
+		return ret;
+	};
+	void Push(const Stage& stage) override {
+		m_usetStages.insert(stage);
+		m_vStages.push_back(stage);
+	}
+	const Stage* Parent(const Stage& stage) const override {
+		if (stage.nPIdx <= 0 || stage.nPIdx - 1 >= m_vStages.size())
 			return nullptr;
 		return &m_vStages[stage.nPIdx - 1];
 	}
@@ -93,7 +134,6 @@ public:
 	}
 };
 //extended container with stage's weights/ordering
-class Sokoban;
 //Stack w sorted by weight stages
 class SQStackW : public IStageQueue {
 	const Sokoban&	m_Sokoban;		//field/precalcs
@@ -208,6 +248,7 @@ public:
 	bool IsEmpty() const override { return m_pqStages.empty(); }
 	uint32_t Size() const override { return (uint32_t)m_pqStages.size(); }
 	bool HasStage(const Stage& stage) const override {
+		//CTimeProfiler tp("SQPQueue::HasStage", m_Sokoban.TPC());
 		const vector<Stage>& vMyC = Container(m_pqStages);
 		return std::find(vMyC.begin(), vMyC.end(), stage) != vMyC.end();
 	}

@@ -59,6 +59,13 @@ struct Stage {//POD, 16b
 			llBP >>= 1;
 		}
 	}
+	struct HashFunction
+	{
+		size_t operator()(const Stage& stage) const
+		{
+			return std::hash< int64_t>()(stage.llBoxPos);
+		}
+	};
 };
 struct Storage {
 	uint16_t					nPrty{ 1 };				//1+ priority

@@ -25,18 +25,26 @@
 using namespace std;
 
 typedef const wchar_t* PCWSTR;
+typedef const char* PCSTR;
 //
 #include "SokoTypes.h"
+//#include "TimeProfiler.h"
 //common macros
-inline uint8_t _Bit1Pos(int64_t llBits) {//1 based! 0 if 0!
+inline uint8_t _Bit1Pos(int64_t llBits) {//0 based, 0 if 0!
   uint8_t nPos = 0;
+#ifdef _WIN64
+  unsigned long lIdx = 0;
+  if (_BitScanForward64(&lIdx, llBits))
+    nPos = (uint8_t)lIdx;
+#else
 	while (llBits) {
-		++nPos;
     if (llBits & 1)
       break;
-		llBits >>= 1;
+    ++nPos;
+    llBits >>= 1;
 	}
-	return nPos;
+#endif
+  return nPos;
 }
 inline uint8_t _Popcnt64(int64_t llBits) {
 	

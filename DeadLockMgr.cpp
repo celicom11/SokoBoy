@@ -314,6 +314,7 @@ void CDLMgr::AddDeadPIC(Corral crlDDLNew, IN DeadPIC& dpic) {
   //merge corral
   dpic.llBoxes |= crlDDLNew.llBoxes;
   dpic.llCells |= crlDDLNew.llCells;
+  dpic.llBoxMask = dpic.llBoxes | (dpic.llCells & m_Sokoban.FinalBoxPos());
   //find existing DDL
   for (DeadPIC& dpicE : m_vDeadPICs) {
     if (dpicE.llBoxes == dpic.llBoxes && dpicE.llCells == dpic.llCells) {
@@ -340,89 +341,88 @@ void CDLMgr::AddDeadPIC(Corral crlDDLNew, IN DeadPIC& dpic) {
 uint32_t CDLMgr::GetDDL_(const Stage& stage) const {
   for (uint32_t nIdx = 0; nIdx < m_vDeadPICs.size(); ++nIdx) {
     const DeadPIC& dpic = m_vDeadPICs[nIdx];
-    if( IsDeadPIC_(stage, dpic) )
-      return nIdx + 1;  //valid DDL
+    if ((dpic.llBoxMask & stage.llBoxPos) == dpic.llBoxes &&   //FIX: stage must have all corral's boxes w inner Gs!
+      ((1ll << m_Sokoban.CellPos(stage.ptR)) & dpic.llCells) == 0) {//R must be outside!
+      if (IsDeadPIC_(stage, dpic))
+        return nIdx + 1;  //valid DDL
+    }
   }
   return 0;
 }
 bool CDLMgr::IsDeadPIC_(const Stage& stage, const DeadPIC& dpic) const {
-  if (((dpic.llBoxes | dpic.llCells) & stage.llBoxPos) == dpic.llBoxes && //FIX: stage must have all corral's boxes!
-      ((1ll << m_Sokoban.CellPos(stage.ptR)) & dpic.llCells) == 0) {//R must be outside!
-    for (const Push2DDL& p2ddl : dpic.vP2DLs) {
-      Stage temp = stage;
-      temp.ptR = m_Sokoban.CellPoint(p2ddl.nBoxPos);
-      assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol) && !m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol));
-      assert(p2ddl.nDDLIdx);
-      int nDDLIdx = p2ddl.nDDLIdx - 1;
-      switch (p2ddl.nLastPush) {
-      case SB_UP: ++temp.ptR.nRow;
-        while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)) {
-          _ASSERT(m_Sokoban.IsTunnelPos_UP(temp.ptR.nRow + 1, temp.ptR.nCol));
-          ++temp.ptR.nRow;
-        }
+  for (const Push2DDL& p2ddl : dpic.vP2DLs) {
+    Stage temp = stage;
+    temp.ptR = m_Sokoban.CellPoint(p2ddl.nBoxPos);
+    assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol) && !m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol));
+    assert(p2ddl.nDDLIdx);
+    int nDDLIdx = p2ddl.nDDLIdx - 1;
+    switch (p2ddl.nLastPush) {
+    case SB_UP: ++temp.ptR.nRow;
+      while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)) {
+        _ASSERT(m_Sokoban.IsTunnelPos_UP(temp.ptR.nRow + 1, temp.ptR.nCol));
         ++temp.ptR.nRow;
-        assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      }
+      ++temp.ptR.nRow;
+      assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      temp = m_Sokoban.PushUp(temp);
+      while (m_Sokoban.IsTunnelPos_UP(temp.ptR.nRow, temp.ptR.nCol)) {
         temp = m_Sokoban.PushUp(temp);
-        while (m_Sokoban.IsTunnelPos_UP(temp.ptR.nRow, temp.ptR.nCol)) {
-          temp = m_Sokoban.PushUp(temp);
-        }
-        break;
-      case SB_DN: --temp.ptR.nRow;
-        while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)){
-          _ASSERT(m_Sokoban.IsTunnelPos_DN(temp.ptR.nRow - 1, temp.ptR.nCol));
-          --temp.ptR.nRow;
-        }
+      }
+      break;
+    case SB_DN: --temp.ptR.nRow;
+      while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)){
+        _ASSERT(m_Sokoban.IsTunnelPos_DN(temp.ptR.nRow - 1, temp.ptR.nCol));
         --temp.ptR.nRow;
-        assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      }
+      --temp.ptR.nRow;
+      assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      temp = m_Sokoban.PushDown(temp);
+      while (m_Sokoban.IsTunnelPos_DN(temp.ptR.nRow, temp.ptR.nCol)) {
         temp = m_Sokoban.PushDown(temp);
-        while (m_Sokoban.IsTunnelPos_DN(temp.ptR.nRow, temp.ptR.nCol)) {
-          temp = m_Sokoban.PushDown(temp);
-        }
-        break;
-      case SB_LT: ++temp.ptR.nCol;
-        while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)) {
-          _ASSERT(m_Sokoban.IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol+1));
-          ++temp.ptR.nCol;
-        }
+      }
+      break;
+    case SB_LT: ++temp.ptR.nCol;
+      while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)) {
+        _ASSERT(m_Sokoban.IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol+1));
         ++temp.ptR.nCol;
-        assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      }
+      ++temp.ptR.nCol;
+      assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      temp = m_Sokoban.PushLeft(temp);
+      while (m_Sokoban.IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol)) {
         temp = m_Sokoban.PushLeft(temp);
-        while (m_Sokoban.IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol)) {
-          temp = m_Sokoban.PushLeft(temp);
-        }
-        break;
-      case SB_RT: --temp.ptR.nCol;
-        while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)) {
-          _ASSERT(m_Sokoban.IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol - 1));
-          --temp.ptR.nCol;
-        }
+      }
+      break;
+    case SB_RT: --temp.ptR.nCol;
+      while (!m_Sokoban.HasBox(temp, temp.ptR.nRow, temp.ptR.nCol)) {
+        _ASSERT(m_Sokoban.IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol - 1));
         --temp.ptR.nCol;
-        assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      }
+      --temp.ptR.nCol;
+      assert(m_Sokoban.IsSpace(temp.ptR.nRow, temp.ptR.nCol));
+      temp = m_Sokoban.PushRight(temp);
+      while (m_Sokoban.IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol)) {
         temp = m_Sokoban.PushRight(temp);
-        while (m_Sokoban.IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol)) {
-          temp = m_Sokoban.PushRight(temp);
-        }
-        break;
       }
-      if (p2ddl.nDDLType == DDL_DW) {//need to re-check if DWDL still has place
-        if ((p2ddl.nLastPush== SB_UP || p2ddl.nLastPush == SB_DN) && !IsDeadWallDL_(temp, m_vHDWs[nDDLIdx]))
-          return 0;//not a DDL!
-        if ((p2ddl.nLastPush == SB_LT || p2ddl.nLastPush == SB_RT) && !IsDeadWallDL_(temp, m_vVDWs[nDDLIdx]))
-          return 0;//not a DDL!
-      }
-      else if (p2ddl.nDDLType == DDL_FG) {//need to re-check if FGDL still has place
-        if (!m_FGs.IsFixedGoalDL(temp, p2ddl.nDDLIdx))
-          return 0;//not a DDL!
-      }
-      else {
-        assert(p2ddl.nDDLType == DDL_DDL);
-        if (!IsDeadPIC_(temp, m_vDeadPICs[nDDLIdx]))
-          return false;
-      }
+      break;
     }
-    return true;//DDL!
+    if (p2ddl.nDDLType == DDL_DW) {//need to re-check if DWDL still has place
+      if ((p2ddl.nLastPush== SB_UP || p2ddl.nLastPush == SB_DN) && !IsDeadWallDL_(temp, m_vHDWs[nDDLIdx]))
+        return 0;//not a DDL!
+      if ((p2ddl.nLastPush == SB_LT || p2ddl.nLastPush == SB_RT) && !IsDeadWallDL_(temp, m_vVDWs[nDDLIdx]))
+        return 0;//not a DDL!
+    }
+    else if (p2ddl.nDDLType == DDL_FG) {//need to re-check if FGDL still has place
+      if (!m_FGs.IsFixedGoalDL(temp, p2ddl.nDDLIdx))
+        return 0;//not a DDL!
+    }
+    else {
+      assert(p2ddl.nDDLType == DDL_DDL);
+      if (!IsDeadPIC_(temp, m_vDeadPICs[nDDLIdx]))
+        return false;
+    }
   }
-  return false;
+  return true;//DDL!
 }
 uint32_t CDLMgr::GetDeadWallDL_(const Stage& stage, int8_t nLastPush, int nRow, int nCol) const {
   uint8_t nBoxPos = m_Sokoban.CellPos({ uint8_t(nRow),uint8_t(nCol) });//0-based

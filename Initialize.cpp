@@ -127,7 +127,7 @@ bool Sokoban::InitCfg_() {
 		assert(0);
 		return false;
 	}
-	crdr.GetBVal(L"Rpt_PIC_Merge", m_Cfg.bRpt_PIC_Merge);
+	//crdr.GetBVal(L"Rpt_PIC_Merge", m_Cfg.bRpt_PIC_Merge);
 	crdr.GetBVal(L"Rpt_Sol", m_Cfg.bRpt_Sol);
 	crdr.GetBVal(L"Rpt_UIMode", m_Cfg.bRpt_UIMode);
 	crdr.GetNVal(L"RSM_Depth", m_Cfg.nRSM_Depth);
@@ -325,6 +325,7 @@ bool Sokoban::Initialize_(PCWSTR wszPuzzlePath) {
 		m_Reporter.PC("Failed to init DeadLock manager!").PEol();
 		return false;
 	}
+	m_Reporter.PC("FixedGoals: ").P(m_DLM.FGSCount()).PEol();
 	if (m_Cfg.wsSearch != L"BFS") {
 		uint16_t nRSMDepth = m_Cfg.nRSM_Depth ? m_Cfg.nRSM_Depth : (uint16_t)log2(m_nSpaces) + m_nBoxes*2/3;// *5 / 4;
 		m_RSM.Init(nRSMDepth);

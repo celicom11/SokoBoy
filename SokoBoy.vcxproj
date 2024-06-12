@@ -151,6 +151,7 @@
     <ClCompile Include="Hungarian1616.cpp" />
     <ClCompile Include="Initialize.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="PM_Kuhn.cpp" />
     <ClCompile Include="Reporter.cpp" />
     <ClCompile Include="ReverseStages.cpp" />
     <ClCompile Include="Search.cpp" />
@@ -165,12 +166,14 @@
     <ClInclude Include="DeadLockMgr.h" />
     <ClInclude Include="FixedGoals.h" />
     <ClInclude Include="Hungarian1616.h" />
+    <ClInclude Include="PM_Kuhn.h" />
     <ClInclude Include="Reporter.h" />
     <ClInclude Include="ReverseStages.h" />
     <ClInclude Include="Sokoban.h" />
     <ClInclude Include="SokoTypes.h" />
     <ClInclude Include="StageQueue.h" />
     <ClInclude Include="StdAfx.h" />
+    <ClInclude Include="TimeProfiler.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Sokoboy.cfg" />

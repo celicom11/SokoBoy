@@ -18,7 +18,7 @@ namespace {
 	}
 }
 Sokoban::Sokoban() : m_DLM(*this), m_RSM(*this) {
-	m_pClosedStgs = new SQVec;
+	m_pClosedStgs = new SQVecEx(*this);//test new container
 }
 Sokoban::~Sokoban() {
 	delete m_pClosedStgs;
@@ -63,7 +63,7 @@ bool Sokoban::ReportSolution(const Stage& last, PCWSTR wszPath, double dblTime) 
 	}
 
 	outFile << "This search took: " << dblTime << " seconds" << endl;
-
+	//outFile << m_TPC.ToString() << endl;
 	return true;
 }
 

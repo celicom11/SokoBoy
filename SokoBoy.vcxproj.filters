@@ -47,6 +47,9 @@
     <ClCompile Include="FixedGoals.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="PM_Kuhn.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sokoban.h">
@@ -80,6 +83,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="FixedGoals.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TimeProfiler.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PM_Kuhn.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

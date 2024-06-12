@@ -27,8 +27,8 @@ class Sokoban {//field+....
 	bitset<MAX_SPACES>	m_btsTnlPosRT;										//Tunnel pos on push RIGHT
 	CDLMgr							m_DLM;														//DeadlockMgr
 	CRStages						m_RSM;														//Reverse stages
-	vector<Storage>			m_vStg;														//TODO:sort/anaylize orders
-	SQVec*							m_pClosedStgs{nullptr};						//temp member to provide node's Depth check for DFS
+	vector<Storage>			m_vStg;														//TODO:sort/anaylize POC
+	IStageQueue*				m_pClosedStgs{nullptr};						//temp member to provide node's Depth check for DFS
 
 
 public:

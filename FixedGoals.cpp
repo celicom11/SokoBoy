@@ -32,34 +32,6 @@ namespace {
     };
   };
 
-  //naive/brute fotrce impl for Graph BiPartite check
-  bool _HasPM_(int nCount, int64_t(&aRBoxes)[MAX_BOXES]) {
-    if (nCount == 1)
-      return aRBoxes[0] != 0;
-    int64_t llLastBox = aRBoxes[nCount - 1];
-    if (!llLastBox)
-      return false;
-    //remove 1by1 edges and check for PerfectMatch exists wo last Box
-    uint8_t nBitPos = 0;
-    while (llLastBox) {
-      if (llLastBox & 1) {
-        int64_t aRBoxesNew[MAX_BOXES];
-        bool bGood = true;
-        for (int nIdx = 0; nIdx < nCount - 1; ++nIdx) {
-          aRBoxesNew[nIdx] = aRBoxes[nIdx] & ~(1ll << nBitPos);
-          if (!aRBoxesNew[nIdx]) {
-            bGood = false;
-            break;
-          }
-        }
-        if (bGood && _HasPM_(nCount - 1, aRBoxesNew))
-          return true;
-      }
-      ++nBitPos;
-      llLastBox >>= 1;
-    }
-    return false;
-  }
 }
 void CFixedGoals::Init() {
   const int nMaxB = (1 << m_Sokoban.BoxCount()) - 1; //2^MAX_BOXES-1 max;case when all boxes are G is a final pos/excluded!
@@ -100,7 +72,7 @@ void CFixedGoals::AddFixedGoal_(const vector<Point>& vStgPts) {
     for (FGFreeGInfo& fginfo : fgs.vFreeGI) {
       if (fginfo.llFreeGPos & llUnmovedGoals) {
         aSBI[0].nRPos = 0;//unkn
-        aSBI[0].nBoxPos = _Bit1Pos(fginfo.llFreeGPos) - 1;
+        aSBI[0].nBoxPos = _Bit1Pos(fginfo.llFreeGPos);
         fginfo.llBoxRCells |= rsm.GetRBoxCells(llUnmovedGoals | fgs.llBoxes, aSBI, false);
         if (_Popcnt64(fginfo.llBoxRCells) >= FIXEDPC) {//this G box is free
           llUnmovedGoals ^= fginfo.llFreeGPos;
@@ -122,7 +94,7 @@ void CFixedGoals::AddFixedGoal_(const vector<Point>& vStgPts) {
       ifgpCurrent.vDynaG.emplace_back();
       SFreeG& freeg = ifgpCurrent.vDynaG.back();
       freeg.nGIdx = nIdx;
-      freeg.nBoxPos = _Bit1Pos(fginfo.llFreeGPos) - 1;
+      freeg.nBoxPos = _Bit1Pos(fginfo.llFreeGPos);
     }
   }
   vector<SImpFGPos> vImpFGoals(1, ifgpCurrent);//~Stack
@@ -208,20 +180,20 @@ void CFixedGoals::AddFixedGoal_(const vector<Point>& vStgPts) {
     //Pass3: update FreeG possible positions as some pulled IFG boxes could free more squares for them!
     for (FGFreeGInfo& freeG : fgs.vFreeGI) {
       aSBI[0].nRPos = 0;//unkn
-      aSBI[0].nBoxPos = _Bit1Pos(freeG.llFreeGPos) - 1;
+      aSBI[0].nBoxPos = _Bit1Pos(freeG.llFreeGPos);
       //do it for all ImposedFG position  - could be an overhead, but its accurate( whatif FreeG is unlocked during IFG detection?)
       for (int64_t llIFG : fgs.vIFGPos) {
         int64_t llBoxRCells = rsm.GetRBoxCells(fgs.llBoxes | freeG.llFreeGPos | llIFG, aSBI, false);
         freeG.llBoxRCells |= llBoxRCells;
         aSBI[0].nRPos = 0;//unkn
-        aSBI[0].nBoxPos = _Bit1Pos(freeG.llFreeGPos) - 1;
+        aSBI[0].nBoxPos = _Bit1Pos(freeG.llFreeGPos);
       }
     }
   }
   else {//no IFG, all boxes are free-pulled:lets pull them as a single box, as exact "packing order" is unknown (todo!)
     for (FGFreeGInfo& freeG : fgs.vFreeGI) {
       aSBI[0].nRPos = 0;//unkn
-      aSBI[0].nBoxPos = _Bit1Pos(freeG.llFreeGPos) - 1;
+      aSBI[0].nBoxPos = _Bit1Pos(freeG.llFreeGPos);
       int64_t llBoxRCells = rsm.GetRBoxCells(fgs.llBoxes | freeG.llFreeGPos, aSBI, false);
       freeG.llBoxRCells |= llBoxRCells;
     }
@@ -254,20 +226,23 @@ bool CFixedGoals::IsFixedGoalDL(const Stage& stage, uint32_t nFGIdx) const {
         if (llNonFixedBoxes & fg.llDeadPos)
           continue;//try another IFG combination
         vector<int64_t> vRBoxes;
+        int64_t llAllBoxes = 0;
         uint8_t nNFBoxesCount = _Popcnt64(llNonFixedBoxes), nMinRBoxes = MAX_BOXES;
         assert(fg.vFreeGI.size() == nNFBoxesCount);
         for (const FGFreeGInfo& fginfo : fg.vFreeGI) {
-          const int64_t llRBoxes = llNonFixedBoxes & fginfo.llBoxRCells;//set of stage boxes in the pull-reachable cells for this free (non-FG/IFG) box
+          // pull-reachable stage boxes for this free (non-FG/non-IFG) G
+          const int64_t llRBoxes = llNonFixedBoxes & fginfo.llBoxRCells;
           if (!llRBoxes)
             continue; //FG DL, as non of the boxes can be pushed to this G! TODO: check for box influences/fill order?
           uint8_t nPC = _Popcnt64(llRBoxes);
-          if (nPC < nNFBoxesCount) { //if any box can reach this G - we exclude this G from GBP check
+          if (nPC < nNFBoxesCount) { //ignore G which can reached by any box
+            llAllBoxes |= llRBoxes;
             vRBoxes.push_back(llRBoxes);
             if (nMinRBoxes > nPC)
               nMinRBoxes = nPC;
           }
         }
-        if (nMinRBoxes < vRBoxes.size() && !HasPerfectMatch_(vRBoxes)) {
+        if (nMinRBoxes < vRBoxes.size() && !HasPerfectMatch_(llAllBoxes, vRBoxes)) {
           //DEBUG
           //m_Sokoban.Reporter().PC(L">>>>>>FG NoPM4Goals DL:").PEol();
           //m_Sokoban.Display(stage);
@@ -288,21 +263,24 @@ bool CFixedGoals::IsFixedGoalDL(const Stage& stage, uint32_t nFGIdx) const {
 #endif
     return true; //some box is in FG DeadPos!
   }
+  int64_t llAllBoxes = 0;
   vector<int64_t> vRBoxes;
   uint8_t nNFBoxesCount = _Popcnt64(llNonFixedBoxes), nMinRBoxes = MAX_BOXES;
   assert(fg.vFreeGI.size() == nNFBoxesCount);
   for (const FGFreeGInfo& fginfo : fg.vFreeGI) {
-    const int64_t llRBoxes = llNonFixedBoxes & fginfo.llBoxRCells;//set of stage boxes in the pull-reachable cells for this free (non-FG/IFG) box
+    // pull-reachable stage boxes for this free (non-FG/non-IFG) G
+    const int64_t llRBoxes = llNonFixedBoxes & fginfo.llBoxRCells;
     if (!llRBoxes)
       return true; //FG DL, as non of the boxes can be pushed to this G! TODO: check for box influences/fill order?
     uint8_t nPC = _Popcnt64(llRBoxes);
     if (nPC < nNFBoxesCount) { //if any box can reach this G - we exclude this G from GBP check
+      llAllBoxes |= llRBoxes;
       vRBoxes.push_back(llRBoxes);
       if (nMinRBoxes > nPC)
         nMinRBoxes = nPC;
     }
   }
-  if (nMinRBoxes < vRBoxes.size() && !HasPerfectMatch_(vRBoxes)) {
+  if (nMinRBoxes < vRBoxes.size() && !HasPerfectMatch_(llAllBoxes, vRBoxes)) {
     //DEBUG
     //m_Sokoban.Reporter().PC(L">>>>>>FG NoPM4Goals DL:").PEol();
     //m_Sokoban.Display(stage);
@@ -310,10 +288,24 @@ bool CFixedGoals::IsFixedGoalDL(const Stage& stage, uint32_t nFGIdx) const {
   }
   return false;
 }
-bool CFixedGoals::HasPerfectMatch_(const vector<int64_t>& vRBoxes) const {
-  //check if each box has 1+ unique Reachable Box (= perfect match in bipartite graph) 
-  int64_t aRBoxes[MAX_BOXES]; memcpy(aRBoxes, vRBoxes.data(), sizeof(int64_t) * vRBoxes.size());
-  return _HasPM_((int)vRBoxes.size(), aRBoxes);
+//check if each Goal can be reached at least by 1 box (~ perfect match in bipartite graph) 
+bool CFixedGoals::HasPerfectMatch_(int64_t llAllBoxes, const vector<int64_t>& vRBoxes) const {
+  //transform G->llBoxes to Graph structure/G->RBoxes
+  vector<vector<int16_t>> vvL2R(vRBoxes.size());
+  int16_t nBoxIdx = 0;
+  int64_t llBit = 1;
+  while (llAllBoxes) {
+    if (llAllBoxes & 1) { //new box
+      for (size_t nIdx = 0; nIdx < vRBoxes.size(); ++nIdx) {
+        if (vRBoxes[nIdx] & llBit)
+          vvL2R[nIdx].push_back(nBoxIdx);
+      }
+      ++nBoxIdx;
+    }
+    llAllBoxes >>= 1;
+    llBit <<= 1;
+  }
+  return m_PMK.HasPM(vvL2R);
 }
 
 //brute-force search: todo min-hashing?

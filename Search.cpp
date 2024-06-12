@@ -4,6 +4,7 @@
 #include "StageQueue.h"
 //
 bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
+	//CTimeProfiler tp("Search", TPC());
 	uint32_t nQS = 0;
 	uint32_t nPIdx = 1;
 	Stage temp;
