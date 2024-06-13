@@ -86,8 +86,10 @@ See the details/terms in "Sokoban: Solving Techniques,..." and "Notes on Impleme
 - DEPTH: depth of the current stage/node.
 - DDLs: count of the Dynamic DeadLocks
 ## Puzzles directory
-Contains various puzzles/levels taken from public sources and which are used for the Sokoboy testing. Current version can quickly solve most of the levels there. Really hard one,for example, is *6170_moves_more* from https://sokoban-max-moves.herokuapp.com/, but with recent performance improvements it took 1135 seconds to find 1474 pushes to solve it. 
-- Sub-dir **sokhard** contains a subset of the Lee J. Haywood collection https://www.sokobanonline.com/play/web-archive/lee-j-haywood/sokhard that fits Sokoboy's size/number of boxes restricitons. The most hard/time-consuming there are: 112-Catalina(1307s), 110-Antonia(447s), 109-Terra (144s), 121-Gerrilyn (138s), 120-Heulwen (134s). 112-Catalina to be investigated.
+Contains various puzzles/levels taken from public sources and which are used for the Sokoboy testing. Current version can quickly solve most of the levels there. 
+- Hard one, for example, is *6170_moves_more* from https://sokoban-max-moves.herokuapp.com/, but with recent performance improvements it took 1135 seconds to find 1474 pushes to solve it.
+- Unslovable: **sasquatch_iii_12.xsb** - it contains quite "unpleasand" goals configuration at the top, which require very strict order of filling. Otherwise a non-static,non-PI-Corral deadlock gets created which is not recognized by the Sokoboy. To be resolved with a "semi-fixed goals" implementation (see below).  
+Sub-dir **sokhard** contains a subset of the Lee J. Haywood collection https://www.sokobanonline.com/play/web-archive/lee-j-haywood/sokhard that fits Sokoboy's size/number of boxes restricitons. The most hard/time-consuming there are: 112-Catalina(1307s), 110-Antonia(447s), 109-Terra (144s), 121-Gerrilyn (138s), 120-Heulwen (134s). 112-Catalina to be investigated.
 ## How to Contribute
 As for any new/not-well-tested software, any suggestions, requests, bug findings, etc. are **VERY WELCOME**! Modifying/extending current code could be done with the standard GitHub forking/pulling [workflow](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project).
 
