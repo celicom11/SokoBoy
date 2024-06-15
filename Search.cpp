@@ -16,44 +16,6 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 
 	do
 	{
-#if 0//_DEBUG
-	static Point aPts[] {
-		{1,4},
-		{2,7},
-		{3,2},{3,5},{3,7},
-		{4,6},
-		{5,2},
-		{7,3},{7,4}
-	};
-
-/* this must be a DeadPIC!
-	417x 484?
-##########
-#   $@...#
-## #...* #
-# $ .$#*##
-#   # $  #
-# $## #  #
-#     ## #
-## $$#   #
-#      # #
-##########
-*/
-	bool bBrk = true;
-	//current.llBoxPos == 10213366471934016ll;
-	for (const Point& pt : aPts) {
-		if (!HasBox(current, pt.nRow, pt.nCol)) {
-			bBrk = false;
-			break;
-		}
-	}
-	if (bBrk) {
-			m_Reporter.PC(" >>>>>DEBUG: ").PEol();
-			Display(current);
-			m_Reporter.PC(" QS: ").P(nQS).PC(" ALL: ").P(m_pClosedStgs->Size()).PC(" DEPTH: ").P(Depth(current)).PC(" DDLs: ").P(m_DLM.DDLCount()).PEol();
-	}
-#endif
-
 		if (m_Cfg.nRpt_SQInc && (m_Cfg.nRpt_SQInc == 1 || abs((int)(nQS - pSQ->Size())) >= m_Cfg.nRpt_SQInc)) {
 			Display(current);
 			m_Reporter.PC("DST: ");
@@ -85,6 +47,9 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				if (!IsTunnelPos_UP(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_UP, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
+						//[20240613][fix issue when DeadPIC cannot be detected because child becomes INF!]
+						if (nCIdx)
+							temp.nWeight = current.nWeight;
 						temp.nPIdx = nPIdx;
 						pSQ->Push(temp);
 					}
@@ -101,6 +66,8 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				if (!IsTunnelPos_LT(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_LT, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
+						if (nCIdx)
+							temp.nWeight = current.nWeight;
 						temp.nPIdx = nPIdx;
 						pSQ->Push(temp);
 					}
@@ -117,6 +84,8 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				if (!IsTunnelPos_DN(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_DN, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
+						if (nCIdx)
+							temp.nWeight = current.nWeight;
 						temp.nPIdx = nPIdx;
 						pSQ->Push(temp);
 					}
@@ -133,6 +102,8 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 				if (!IsTunnelPos_RT(temp.ptR.nRow, temp.ptR.nCol) && !m_DLM.IsDeadLock(temp, SB_RT, dpic)) {
 					bPushed = true;
 					if (!pSQ->HasStage(temp) && !m_pClosedStgs->HasStage(temp)) {
+						if (nCIdx)
+							temp.nWeight = current.nWeight;
 						temp.nPIdx = nPIdx;
 						pSQ->Push(temp);
 					}
@@ -142,27 +113,6 @@ bool Sokoban::Search(IStageQueue* pSQ, IN OUT Stage& current) {
 		if (nCIdx && !bPushed ) { //new dead PICorral/DDL!
 			Corral crlDDLNew = sc.GetCorral(nCIdx);
 			if (_Popcnt64(crlDDLNew.llBoxes | dpic.llBoxes) < m_nBoxes) {
-#if 0//_DEBUG
-				//if (crlDDLNew.llBoxes == 0x0000102000000000) {
-				m_Reporter.PC("New PI-Corrals DDL").PEol();
-				Display(current);
-				m_Reporter.PEol();
-				crlDDLNew.llBoxes |= dpic.llBoxes;
-				crlDDLNew.llCells |= dpic.llCells;
-				DisplayCorral(current.ptR, crlDDLNew);
-				//}
-#endif
-			/*if (m_Cfg.bRpt_PIC_Merge && crlDDLNew.llBoxes != (crlDDLNew.llBoxes | crlDDL.llBoxes)) {
-				Display(current);
-				m_Reporter.PC("DST: ");
-				if (pSQ->Top().nWeight < 0xFFFF)
-					m_Reporter.P(pSQ->Top().nWeight);
-				nQS = pSQ->Size();
-				m_Reporter.PC(" QS: ").P(nQS).PC(" ALL: ").P(m_pClosedStgs->Size()).PC(" DEPTH: ").P(Depth(current)).PC(" DDLs: ").P(m_DLM.DDLCount()).PEol();
-				m_Reporter.PC("Merging PI Corrals").PEol();
-				DisplayCorral(current.ptR, crlDDLNew);
-				DisplayCorral(current.ptR, crlDDL);
-			}*/
 				m_DLM.AddDeadPIC(crlDDLNew, dpic);
 				//if (!m_DLM.IsDDL(current)) {
 				//	_ASSERT(0);

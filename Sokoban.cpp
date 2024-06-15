@@ -135,9 +135,13 @@ bool Sokoban::Run() {
 }
 
 void Sokoban::UpdateStageWeight(IN OUT Stage& stage) const {
-	stage.nWeight = m_RSM.GetMinDist(stage);
-	if (stage.nWeight >= SOKOINF - m_nBoxes)
-		stage.nWeight = SOKOINF - m_DLM.NearestFGLSize(stage);
+	//CTimeProfiler tp("UpdateStageWeight", TPC());
+	uint16_t nWeight = m_RSM.GetMinDist(stage);
+	if (nWeight >= SOKOINF - m_nBoxes)
+		nWeight = SOKOINF - m_DLM.NearestFGLSize(stage);
+	//[20240613][fix issue when DeadPIC cannot be detected because child weight->INF!]
+	if (stage.nWeight == SOKOINF || nWeight != SOKOINF)
+		stage.nWeight = nWeight;
 }
 uint32_t Sokoban::Depth(const Stage& stage) const{
 	uint32_t nRet = 0;
