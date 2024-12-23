@@ -44,3 +44,9 @@
 /.vs/SokoBoy/v16/Browse.VC.db-wal
 /.vs/SokoBoy/v16/Browse.VC.db-shm
 *.ipch
+/.vs/SokoboyGit/v16/Browse.VC.opendb
+/.vs/SokoboyGit/v16/Browse.VC.db-wal
+/.vs/SokoboyGit/v16/Browse.VC.db-shm
+/.vs/SokoboyGit/v16/Browse.VC.db
+/.vs/SokoboyGit/v16/TestStore/0/testlog.manifest
+*.testlog
