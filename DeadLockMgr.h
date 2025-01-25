@@ -48,10 +48,10 @@ struct DeadPIC {
 class CDLMgr {
 //DATA
   Sokoban&								m_Sokoban;
-	uint16_t								m_aHDWIdx[MAX_SPACES];	//1-based indexes
-	uint16_t								m_aVDWIdx[MAX_SPACES];	
-	vector<DeadWall>				m_vHDWs;								//Horizontal DeadWalls
-	vector<DeadWall>				m_vVDWs;								//Horizontal DeadWalls
+	uint16_t								m_aHDWIdx[MAX_SPACES]{ 0 };	//1-based indexes
+	uint16_t								m_aVDWIdx[MAX_SPACES]{ 0 };
+	vector<DeadWall>				m_vHDWs;										//Horizontal DeadWalls
+	vector<DeadWall>				m_vVDWs;										//Horizontal DeadWalls
 	CFixedGoals							m_FGs;
 	//DDLs!
 	vector<DeadPIC>				m_vDeadPICs;

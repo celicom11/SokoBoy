@@ -223,6 +223,7 @@ public:
 		return m_DLM.IsFixedDeadLock(stage, nLastPush);
 	}
 //METHODS
+  bool Initialize(PCWSTR wszPuzzlePath); //public for testing
 	bool Run();
 	//Reporting helpers
 	bool ReportSolution(const Stage& last, PCWSTR wszPath, double dblTime);
@@ -238,7 +239,6 @@ public:
 	bool CanPushAnyBox_(const Stage& stage) const;
 private:
 	bool InitCfg_();
-	bool Initialize_(PCWSTR wszPuzzlePath);
 	void AddDeadCornerPos_();
 	void InitTunnelPos_();			//update m_btsTnlPos
 	//void InitStgDist_();				//update m_aMDist with distances from stg to any cell in empty field 

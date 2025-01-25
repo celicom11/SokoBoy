@@ -22,6 +22,8 @@
 #include <bitset>
 #include <unordered_set>
 #include <cmath>
+#include <filesystem>
+#include <regex>
 using namespace std;
 
 typedef const wchar_t* PCWSTR;

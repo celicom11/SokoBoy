@@ -2,7 +2,6 @@
 #include "Sokoban.h"
 #include "CfgReader.h"
 
-#include <Windows.h>
 //static helpers
 namespace {
 	void _ReadAllFiles(PCWSTR wszPath, OUT vector<wstring>& vPaths) {
@@ -11,40 +10,39 @@ namespace {
 			assert(0);
 			return;
 		}
+
 		wstring wsPath(wszPath);
-		if (wsPath.size() < 3 || wsPath.size() > _MAX_PATH ) {
+		if (wsPath.size() < 3 || wsPath.size() > _MAX_PATH) {
 			assert(0);
 			return;
 		}
-		uint32_t nStarPos = (uint32_t)wsPath.find(L'*');
-		if (nStarPos == wstring::npos)
-			vPaths.push_back(wsPath);
-		else { //find all files in the dir
-			//sorry: Windows impl only - feel free to use std::filesystem OR port it to *nix directly!
-			WIN32_FIND_DATA ffd;
-			HANDLE hFind = ::FindFirstFileW(wszPath, &ffd);
-			if(!hFind || hFind == INVALID_HANDLE_VALUE)
-				return;//error or no files
-			//else
-			wstring wsCurDir,wsSrchDir;
-			uint32_t nEODirPos = (uint32_t)wsPath.find_last_of(L"\\/");
-			if (nEODirPos != wstring::npos)
-				wsSrchDir = wsPath.substr(0, nEODirPos+1);
-			if (wszPath[1] != L':') {//relative path?
-				wchar_t wszCurDir[MAX_PATH]{ 0 };
-				::GetCurrentDirectoryW(_countof(wszCurDir), wszCurDir);
-				wsCurDir = wszCurDir;
-			}
-			do {
-				if (0 == (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-					wstring wsPuzzlePath = (!wsCurDir.empty() ? (wsCurDir + L'\\') : wstring()) + wsSrchDir + ffd.cFileName;
-					vPaths.push_back(wsPuzzlePath);
+
+		filesystem::path searchPath(wsPath);
+		filesystem::path parentPath = searchPath.parent_path();
+		wstring filenamePattern = searchPath.filename().wstring();
+
+		// Convert the wildcard pattern to a regex pattern
+		wstring regexPattern = std::regex_replace(filenamePattern, std::wregex(L"\\*"), L".*");
+		regexPattern = std::regex_replace(regexPattern, std::wregex(L"\\?"), L".");
+		std::wregex regex(regexPattern, std::regex::icase);
+
+		try {
+			for (const auto& entry : filesystem::directory_iterator(parentPath)) {
+				if (filesystem::is_regular_file(entry.status())) {
+					wstring filename = entry.path().filename().wstring();
+					if (std::regex_match(filename, regex)) {
+						vPaths.push_back(entry.path().wstring());
+					}
 				}
-			} while (::FindNextFileW(hFind, &ffd) != 0);
-			::FindClose(hFind);
+			}
+		}
+		catch (const filesystem::filesystem_error& e) {
+			// Handle error (e.g., log it)
+			e;
+			return;
 		}
 	}
-	bool _ReadSokoRows(PCWSTR wszPuzzlePath, OUT vector<string>& vRows) {
+bool _ReadSokoRows(PCWSTR wszPuzzlePath, OUT vector<string>& vRows) {
 		ifstream inFile;
 		inFile.open(wszPuzzlePath, ifstream::in);
 		if (!inFile) {
@@ -153,7 +151,7 @@ bool Sokoban::InitCfg_() {
 
 	return true;
 }
-bool Sokoban::Initialize_(PCWSTR wszPuzzlePath) {
+bool Sokoban::Initialize(PCWSTR wszPuzzlePath) {
 	//CLEANUP
 	m_nBoxes = m_nSpaces = 0;
 	m_dim.nCols = m_dim.nRows = 0;
@@ -242,13 +240,13 @@ bool Sokoban::Initialize_(PCWSTR wszPuzzlePath) {
 				++m_nSpaces;
 				m_aBitPos[ptCell.nRow][ptCell.nCol] = (int8_t)m_nSpaces;
 			}
-			else if (cCode == ' ' || cCode == '_') {//space
+			else if (cCode == ' ' || cCode == '_' || cCode == '-') {//space
 				m_aField[ptCell.nRow][ptCell.nCol] = 1;
 				m_aSpaces[m_nSpaces] = ptCell;
 				++m_nSpaces;
 				m_aBitPos[ptCell.nRow][ptCell.nCol] = (int8_t)m_nSpaces;
 			}
-			else if (cCode == 'B' || cCode == '$') { //Box in space
+			else if (cCode == '$') { //Box
 				m_aField[ptCell.nRow][ptCell.nCol] = 1;
 				m_stInit.llBoxPos |= 1ll << m_nSpaces;
 				m_aSpaces[m_nSpaces] = ptCell;
@@ -256,7 +254,7 @@ bool Sokoban::Initialize_(PCWSTR wszPuzzlePath) {
 				m_aBitPos[ptCell.nRow][ptCell.nCol] = (int8_t)m_nSpaces;
 				++m_nBoxes;
 			}
-			else if (cCode == 'R' || cCode == '@') { //Man in space
+			else if (cCode == '@') { //Player
 				m_aField[ptCell.nRow][ptCell.nCol] = 1;
 				m_aSpaces[m_nSpaces] = ptCell;
 				++m_nSpaces;

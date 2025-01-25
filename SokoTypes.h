@@ -18,6 +18,7 @@ struct Point {
 	uint8_t	nRow{ 0 };
 	uint8_t	nCol{ 0 };
 	Point() = default;
+	Point(int i, int j) :nRow(uint8_t(i)), nCol(uint8_t(j)) {}
 	Point(uint8_t i, uint8_t j) :nRow(i), nCol(j) {}
 	bool operator==(const Point& rhs) const {
 		return nRow == rhs.nRow && nCol == rhs.nCol;

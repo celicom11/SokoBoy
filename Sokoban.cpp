@@ -99,7 +99,7 @@ bool Sokoban::Run() {
 		m_Reporter.PC("\nSolving ").PC(_PathFileName(wsPPath)).PC(" with ").PC(m_Cfg.wsSearch).PEol();
 		time(&tBegin);
 		m_Reporter.PC("Initializing ...").PEol();
-		if (!Initialize_(wsPPath.c_str())) {
+		if (!Initialize(wsPPath.c_str())) {
 			continue; //skip bad entry
 		}
 		if(m_stInit.nWeight!= SOKOINF)

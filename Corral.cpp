@@ -408,8 +408,9 @@ bool CStageCorrals::IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) co
 		if(!m_Sokoban.IsStorage(ptBox.nRow, ptBox.nCol))
 			bRet = true;//non-G box
 		//B. check if box is a gate/can be moved outside the nCIdx
+		//UP/DN
 		if (IsNonCorralSpace_(ptBox.nRow - 1, ptBox.nCol, nCIdx) && IsNonCorralSpace_(ptBox.nRow + 1, ptBox.nCol, nCIdx)) {
-			if (!m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol)) {
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol) && !BecomeLockedByCorralBoxes_(ptBox, SB_UP, nCIdx)) {
 				//we need extra check if box would be deadlocked on push up...
 				//hopefully if extrnal boxes influence it will be picked up by Push2DDL stuff....
 				temp = *m_pStage;
@@ -418,7 +419,7 @@ bool CStageCorrals::IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) co
 				if (!m_Sokoban.IsFixedDeadLock(temp, SB_UP))
 					return false;
 			}
-			if (!m_Sokoban.IsDeadPos(ptBox.nRow + 1, ptBox.nCol)) {
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow + 1, ptBox.nCol) && !BecomeLockedByCorralBoxes_(ptBox, SB_DN, nCIdx)) {
 				temp = *m_pStage;
 				temp.ptR = ptBox; --temp.ptR.nRow;//its a space!
 				temp = m_Sokoban.PushDown(temp);
@@ -426,15 +427,16 @@ bool CStageCorrals::IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) co
 					return false;
 			}
 		}
+    //LT/RT
 		if (IsNonCorralSpace_(ptBox.nRow, ptBox.nCol - 1, nCIdx) && IsNonCorralSpace_(ptBox.nRow, ptBox.nCol + 1, nCIdx)) {
-			if (!m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol - 1)) {
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol - 1) && !BecomeLockedByCorralBoxes_(ptBox, SB_LT, nCIdx)) {
 				temp = *m_pStage;
 				temp.ptR = ptBox; ++temp.ptR.nCol;//its a space!
 				temp = m_Sokoban.PushLeft(temp);
 				if (!m_Sokoban.IsFixedDeadLock(temp, SB_LT))
 					return false;
 			}
-			if (!m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol + 1)) {
+			if (!m_Sokoban.IsDeadPos(ptBox.nRow, ptBox.nCol + 1) && !BecomeLockedByCorralBoxes_(ptBox, SB_RT, nCIdx)) {
 				temp = *m_pStage;
 				temp.ptR = ptBox; --temp.ptR.nCol;//its a space!
 				temp = m_Sokoban.PushRight(temp);
@@ -442,7 +444,7 @@ bool CStageCorrals::IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) co
 					return false;
 			}
 		}
-		//C. If box can be moved-in from another corral
+		//C. If box can be moved-in from another unmerged corral
 		//from TOP
 		if (aCC[SB_DN] == nCIdx && !m_Sokoban.IsDeadPos(ptBox.nRow + 1, ptBox.nCol) && IsOtherCorralSpace_(ptBox.nRow - 1, ptBox.nCol, nCIdx))
 			return false;
@@ -457,7 +459,7 @@ bool CStageCorrals::IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) co
 			return false;
 		//D.
 		//TOP cell is non-dead nCIdx cell, bottom is unblockable box in non-CIdx corral
-		//FIX: if it is locked - it must be added to the llExternalLocked boxes!!
+		//NOTE: if it is locked - the locker boxes must be added to the llExternalLocked boxes!!
 		if (aCC[SB_UP] == nCIdx && aCC[SB_DN] == CBOX && !m_Sokoban.IsDeadPos(ptBox.nRow - 1, ptBox.nCol)) {
 			if (CanUnblockLR_(ptBox.nRow + 1, ptBox.nCol, nCIdx, llEL))
 				return false;
@@ -665,3 +667,26 @@ bool CStageCorrals::CanUnblockUD_(uint8_t nRow, uint8_t nCol, uint8_t nCIdx, IN 
 	return false;
 }
 
+//check if box gets locked by other boxes in the corral on nPush direction
+bool CStageCorrals::BecomeLockedByCorralBoxes_(Point ptBox, int8_t nPush, uint8_t nCIdx) const {
+	switch (nPush) {
+	case SB_UP: return IsWallOrCorralBox_({ uint8_t(ptBox.nRow - 2),ptBox.nCol }, nCIdx) &&
+		(IsWallOrCorralBox_(Point(ptBox.nRow - 1,ptBox.nCol - 1), nCIdx) || 
+			IsWallOrCorralBox_(Point(ptBox.nRow - 1,ptBox.nCol + 1), nCIdx));
+	case SB_DN: return IsWallOrCorralBox_({uint8_t(ptBox.nRow + 2),ptBox.nCol }, nCIdx) &&
+		(IsWallOrCorralBox_({ ptBox.nRow + 1,ptBox.nCol - 1 }, nCIdx) ||
+			IsWallOrCorralBox_({ ptBox.nRow + 1,ptBox.nCol + 1 }, nCIdx));
+	case SB_LT: return IsWallOrCorralBox_({ ptBox.nRow,uint8_t(ptBox.nCol - 2)}, nCIdx) &&
+		(IsWallOrCorralBox_({ ptBox.nRow - 1,ptBox.nCol - 1 }, nCIdx) ||
+			IsWallOrCorralBox_({ ptBox.nRow + 1,ptBox.nCol - 1 }, nCIdx));
+	case SB_RT: return IsWallOrCorralBox_({ ptBox.nRow, uint8_t(ptBox.nCol + 2)}, nCIdx) &&
+		(IsWallOrCorralBox_({ ptBox.nRow - 1,ptBox.nCol + 1 }, nCIdx) ||
+			IsWallOrCorralBox_({ ptBox.nRow + 1,ptBox.nCol + 1 }, nCIdx));
+	}
+	return false;
+}
+bool CStageCorrals::IsWallOrCorralBox_(Point ptCell, uint8_t nCIdx) const {
+  if (m_Sokoban.IsWall(ptCell.nRow, ptCell.nCol))
+    return true;
+  return HasCorralEdge_(ptCell, nCIdx);
+}

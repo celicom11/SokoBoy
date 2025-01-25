@@ -74,4 +74,6 @@ private:
   Point OnInnerCorralAdded_();
   bool IsPICorral_(uint8_t nCIdx, OUT int64_t& llExternalLocked) const;
   bool IsSingleCorral_() const;
+  bool BecomeLockedByCorralBoxes_(Point ptBox, int8_t nPush, uint8_t nCIdx) const;
+  bool IsWallOrCorralBox_(Point ptCell, uint8_t nCIdx) const;
 };
