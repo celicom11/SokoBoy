@@ -45,24 +45,33 @@ bool Sokoban::ReportSolution(const Stage& last, PCWSTR wszPath, double dblTime) 
 		return false;
 	}
 	m_Reporter.PC("Saving solution to ").PC(wszPath).PEol();
-
+	string sLURD;
 	const Stage* pStage = &last;
 	while(pStage)  {
-		for (int8_t i = 0; i < m_dim.nRows; ++i)
-		{
-			for (int8_t j = 0; j < m_dim.nCols; ++j)
+		if (m_Cfg.nRpt_Sol & 1) {
+			for (int8_t i = 0; i < m_dim.nRows; ++i)
 			{
-				outFile << GetCode(*pStage, i,j);
+				for (int8_t j = 0; j < m_dim.nCols; ++j)
+				{
+					outFile << GetCode(*pStage, i, j);
+				}
+				outFile << endl;
 			}
 			outFile << endl;
 		}
-		outFile << endl;
-
 		//get parent stage
-		pStage = m_pClosedStgs->Parent(*pStage);
+		const Stage* pParent = m_pClosedStgs->Parent(*pStage);
+		if (m_Cfg.nRpt_Sol & 2)
+			AddLURDMoves_(pParent, pStage, sLURD);
+		pStage = pParent;
+
 	}
 
 	outFile << "This search took: " << dblTime << " seconds" << endl;
+	if (m_Cfg.nRpt_Sol & 2) {
+		outFile << "Approximate LURD:" << endl;
+		outFile << sLURD << endl;
+	}
 	//outFile << m_TPC.ToString() << endl;
 	return true;
 }
@@ -125,7 +134,7 @@ bool Sokoban::Run() {
 		else {
 			double dblTime = difftime(tEnd, tBegin);
 			m_Reporter.PC(m_Cfg.wsSearch).PC(" found solution in ").P(dblTime).PC("  seconds").PEol();
-			if (m_Cfg.bRpt_Sol) {
+			if (m_Cfg.nRpt_Sol) {
 				wstring wsSolPath = _PathNoExt(wsPPath) + L"_" + m_Cfg.wsSearch + L".txt";
 				ReportSolution(current, wsSolPath.c_str(), dblTime);
 			}
@@ -276,7 +285,7 @@ void Sokoban::GetReachableCells(const Stage& stage, OUT vector<Point>& vCells) c
 			temp = WalkUp(current);
 			llNewPt = 1ll << CellPos(temp.ptR);
 			if (0==(llAttended & llNewPt)) {
-				llAttended |= llNewPt;		//new robot pos
+				llAttended |= llNewPt;		//new player pos
 				queueStages.push(temp);
 				vCells.push_back(temp.ptR);
 			}
@@ -286,7 +295,7 @@ void Sokoban::GetReachableCells(const Stage& stage, OUT vector<Point>& vCells) c
 			temp = WalkLeft(current);
 			llNewPt = 1ll << CellPos(temp.ptR);
 			if (0 == (llAttended & llNewPt)) {
-				llAttended |= llNewPt;		//new robot pos
+				llAttended |= llNewPt;		//new player pos
 				queueStages.push(temp);
 				vCells.push_back(temp.ptR);
 			}
@@ -296,7 +305,7 @@ void Sokoban::GetReachableCells(const Stage& stage, OUT vector<Point>& vCells) c
 			temp = WalkDown(current);
 			llNewPt = 1ll << CellPos(temp.ptR);
 			if (0 == (llAttended & llNewPt)) {
-				llAttended |= llNewPt;		//new robot pos
+				llAttended |= llNewPt;		//new player pos
 				queueStages.push(temp);
 				vCells.push_back(temp.ptR);
 			}
@@ -306,7 +315,7 @@ void Sokoban::GetReachableCells(const Stage& stage, OUT vector<Point>& vCells) c
 			temp = WalkRight(current);
 			llNewPt = 1ll << CellPos(temp.ptR);
 			if (0 == (llAttended & llNewPt)) {
-				llAttended |= llNewPt;		//new robot pos
+				llAttended |= llNewPt;		//new player pos
 				queueStages.push(temp);
 				vCells.push_back(temp.ptR);
 			}
@@ -318,6 +327,136 @@ void Sokoban::GetReachableCells(const Stage& stage, OUT vector<Point>& vCells) c
 		queueStages.pop();
 	}//while
 }
+
+//add/prefix player moves to sLURD to reach S2 from S1
+//S1 and S2 must be adjacent/reachable by a single push
+void Sokoban::AddLURDMoves_(const Stage* pS1, const Stage* pS2, IN OUT string& sLURD) const {
+  if (!pS1 || !pS2)
+    return;//ntd
+	//find last player push/target cell
+  Point ptTarget = pS2->ptR;
+	//UP
+	if (HasBox(*pS2, pS2->ptR.nRow - 1, pS2->ptR.nCol) &&
+		!HasBox(*pS1, pS2->ptR.nRow - 1, pS2->ptR.nCol)) {
+		do {
+			++ptTarget.nRow;
+			sLURD.insert(0, "U");
+		} while (!HasBox(*pS1, ptTarget.nRow - 1, ptTarget.nCol));
+		_ASSERT_RET(!NotSpace(*pS1, ptTarget.nRow, ptTarget.nCol), );//snbh!
+	} //DN
+  else if (HasBox(*pS2, pS2->ptR.nRow + 1, pS2->ptR.nCol) &&
+    !HasBox(*pS1, pS2->ptR.nRow + 1, pS2->ptR.nCol)) {
+		do {
+			--ptTarget.nRow;
+			sLURD.insert(0, "D");
+		} while (!HasBox(*pS1, ptTarget.nRow + 1, ptTarget.nCol));
+    _ASSERT_RET(!NotSpace(*pS1, ptTarget.nRow, ptTarget.nCol), );//snbh!
+  }//LT
+  else if (HasBox(*pS2, pS2->ptR.nRow, pS2->ptR.nCol - 1) &&
+    !HasBox(*pS1, pS2->ptR.nRow, pS2->ptR.nCol - 1)) {
+		do {
+			++ptTarget.nCol;
+			sLURD.insert(0, "L");
+		} while (!HasBox(*pS1, ptTarget.nRow, ptTarget.nCol - 1));
+    _ASSERT_RET(!NotSpace(*pS1, ptTarget.nRow, ptTarget.nCol), );//snbh!
+  }//RT
+  else if (HasBox(*pS2, pS2->ptR.nRow, pS2->ptR.nCol + 1) &&
+    !HasBox(*pS1, pS2->ptR.nRow, pS2->ptR.nCol + 1)) {
+		do {
+			--ptTarget.nCol;
+			sLURD.insert(0, "R");
+		} while (!HasBox(*pS1, ptTarget.nRow, ptTarget.nCol + 1));
+    _ASSERT_RET(!NotSpace(*pS1, ptTarget.nRow, ptTarget.nCol), );//snbh!
+  }
+	else {
+		Reporter().PC("NonAdjacent stages in the output S1 and S2").PEol();
+		Display(*pS1);
+		Reporter().PC(" and S2").PEol();
+		Display(*pS2);
+		_ASSERT_RET(0, );//snbh!
+	}
+  //find a shortest walk path from S1 to ptTarget and prepend it to sLURD
+  Stage current = *pS1;
+	struct PointExt {
+		Point			pt;
+		uint32_t  nPIdx{ 0 };//1-based parent index; NOTE: do not use PointExt* with vector because of re-aloccations
+	};
+	vector<PointExt> vAttended;//BFS
+	//prolog
+	int64_t llAttended = 1ll << CellPos(current.ptR), llNewPt = 0;
+	vAttended.push_back({ current.ptR,0 });
+	uint32_t nNodeStart = 0, nNodeEnd = (uint32_t)vAttended.size();//0-level nodes
+	while (nNodeEnd > nNodeStart) {
+		//add children for every node in the level
+		for(uint32_t nNode = nNodeStart; nNode < nNodeEnd; ++nNode) {
+      PointExt& pe = vAttended[nNode];
+      if (pe.pt == ptTarget) {
+        //found the target
+        const PointExt* pNode = &pe;
+        while (pNode->nPIdx) {
+          const PointExt* pParent = &vAttended[pNode->nPIdx - 1];
+          if (pParent->pt.nRow < pNode->pt.nRow)
+						sLURD.insert(0, "d");
+          else if (pParent->pt.nRow > pNode->pt.nRow)
+						sLURD.insert(0, "u");
+          else if (pParent->pt.nCol < pNode->pt.nCol)
+						sLURD.insert(0, "r");
+          else
+						sLURD.insert(0, "l");
+          pNode = pParent;
+        }
+        return;
+      }
+			current.ptR = pe.pt;
+			//UP
+			if (CanWalkUp(current)) {
+				--current.ptR.nRow;
+				llNewPt = 1ll << CellPos(current.ptR);
+				if (0 == (llAttended & llNewPt)) {
+					llAttended |= llNewPt;
+					vAttended.push_back({ current.ptR,nNode + 1 });
+				}
+				++current.ptR.nRow;//restore
+			}
+			//DN
+			if (CanWalkDown(current)) {
+				++current.ptR.nRow;
+				llNewPt = 1ll << CellPos(current.ptR);
+				if (0 == (llAttended & llNewPt)) {
+					llAttended |= llNewPt;
+					vAttended.push_back({ current.ptR,nNode + 1 });
+				}
+        --current.ptR.nRow;//restore
+			}
+			//LT
+			if (CanWalkLeft(current)) {
+				--current.ptR.nCol;
+				llNewPt = 1ll << CellPos(current.ptR);
+				if (0 == (llAttended & llNewPt)) {
+					llAttended |= llNewPt;
+					vAttended.push_back({ current.ptR,nNode + 1 });
+				}
+        ++current.ptR.nCol;//restore
+			}
+			//RT
+			if (CanWalkRight(current)) {
+				++current.ptR.nCol;
+				llNewPt = 1ll << CellPos(current.ptR);
+				if (0 == (llAttended & llNewPt)) {
+					llAttended |= llNewPt;
+					vAttended.push_back({ current.ptR,nNode + 1 });
+				}
+        --current.ptR.nCol;//restore
+			}
+    }//for
+    //continue with the next level
+    nNodeStart = nNodeEnd;
+    nNodeEnd = (uint32_t)vAttended.size();
+	}//while
+  m_Reporter.PC("Could not find a path from ").P(pS1->ptR).PC(" to ").P(ptTarget).PEol();
+  _ASSERT(0);//snbh!
+}
+
 
 
 

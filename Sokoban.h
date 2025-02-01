@@ -147,7 +147,7 @@ public:
 		return 0;
 	}
 
-//ROBOT MOVINGs
+//PLAYER MOVINGs
 	[[nodiscard]] bool CanWalkUp(const Stage& stage) const { 
 		return stage.ptR.nRow > 1 && IsSpace(stage.ptR.nRow-1, stage.ptR.nCol) && !HasBox(stage, stage.ptR.nRow - 1, stage.ptR.nCol);
 	}
@@ -245,4 +245,5 @@ private:
 	//Pre-move
 	//uint16_t MinWalk_(Point pt1, Point pt2) const;
 	bool IsDummySpace_(uint8_t nRow, uint8_t nCol, OUT Point& ptFreeCell) const;
+	void AddLURDMoves_(const Stage* pS1, const Stage* pS2, IN OUT string& sLURD) const;
 };

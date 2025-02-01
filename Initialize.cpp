@@ -67,8 +67,8 @@ bool _ReadSokoRows(PCWSTR wszPuzzlePath, OUT vector<string>& vRows) {
 		return true;
 	}
 	bool _ValidXSB(char cCode) {
-		return cCode == ' ' || cCode == '_' || cCode == '.' || cCode == '$' || cCode == 'B' || cCode == '*' || cCode == 'R' || cCode == '+' || 
-			cCode == '@' || cCode == '#';
+		return cCode == ' ' || cCode == '_' || cCode == '-' || cCode == '.' || cCode == '$' || cCode == '*' || 
+			cCode == '+' || cCode == '@' || cCode == '#';
 	}
 }
 void Sokoban::AddDeadCornerPos_() {
@@ -126,7 +126,7 @@ bool Sokoban::InitCfg_() {
 		return false;
 	}
 	//crdr.GetBVal(L"Rpt_PIC_Merge", m_Cfg.bRpt_PIC_Merge);
-	crdr.GetBVal(L"Rpt_Sol", m_Cfg.bRpt_Sol);
+	crdr.GetNVal(L"Rpt_Sol", m_Cfg.nRpt_Sol);
 	crdr.GetBVal(L"Rpt_UIMode", m_Cfg.bRpt_UIMode);
 	crdr.GetNVal(L"RSM_Depth", m_Cfg.nRSM_Depth);
 	crdr.GetNVal(L"RSM_GBRelax", m_Cfg.nRSM_GBRelax);
@@ -201,7 +201,7 @@ bool Sokoban::Initialize(PCWSTR wszPuzzlePath) {
 		for (char& cCode : sRow) {
 			if (cCode == '#')
 				break;
-			if (cCode == ' ' || cCode == '_')
+			if (cCode == ' ' || cCode == '_' || cCode == '-')
 				cCode = '#'; //replace trailing space
 			else {
 				m_Reporter.PC("Puzzle ").PC(wszPuzzlePath).PC(" has row that starts with '").PC(cCode).PC("' !").PEol();

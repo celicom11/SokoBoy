@@ -47,6 +47,7 @@ struct Stage {//POD, 16b
 		return ptR == rhs.ptR && llBoxPos == rhs.llBoxPos;
 	}
 	void GetBoxesPos(OUT uint8_t(&aBoxBPos)[MAX_BOXES]) const {
+		memset(aBoxBPos, 0xFF, MAX_BOXES);
 		if (!llBoxPos) {
 			assert(0);
 			return;
@@ -74,10 +75,10 @@ struct Storage {
 	//vector<uint64_t>	vDLpos;						//when final, creates ->new<- dead pos, that is cannot be the priority goal if any non-in-stg box is in that new DPos!
 };
 struct SokoCfg {
-	bool       bRpt_Sol{ true };
 	bool       bRpt_PIC_Merge{ true };
 	bool       bRpt_UIMode{ true };			//show nice Unicode drawings instead of XSB codes
 
+	uint16_t        nRpt_Sol{ 0 };
 	uint16_t        nRSM_Depth{ 0 };
 	uint16_t        nRSM_GBRelax{ 1 };
 	uint16_t        nDFS_MaxDepth{ 0 };

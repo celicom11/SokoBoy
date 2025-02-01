@@ -9,6 +9,7 @@ namespace { //static helpers
 		if (std::find(dqOpened.begin(), dqOpened.end(), temp) == dqOpened.end() &&
 			std::find(vClosed.begin(), vClosed.end(), temp) == vClosed.end()) {
 			temp.nPIdx = nPIdx;
+			//_ASSERT(temp.llBoxPos != vClosed[nPIdx - 1].llBoxPos);
 			dqOpened.push_back(temp);
 		}
 	}
@@ -39,6 +40,33 @@ namespace { //static helpers
 		}
 		return nRet;
 	}
+	//bcXd...
+	//Abcd...
+	//expected ret {2,0}
+	//Abcd...
+	//bcXd...
+	//expected ret {0,2}
+	pair<int, int> _GetDiffIndexes(const uint8_t* pA1,const uint8_t* pA2, uint16_t nBoxCount) {
+		pair<int, int> ret{ -1,-1 };
+		for (int nIdx = 0; nIdx < nBoxCount; ++nIdx) {
+			if (pA1[nIdx] != pA2[nIdx]) {
+				ret.first = nIdx;
+				break;
+			}
+		}
+		_ASSERT_RET(ret.first != -1, ret);
+		for (int nIdx = nBoxCount; nIdx > 0; --nIdx) {
+			if (pA1[nIdx-1] != pA2[nIdx-1]) {
+				ret.second = nIdx-1;
+				break;
+			}
+		}
+		_ASSERT_RET(ret.second != -1, ret);
+		if (ret.second != ret.first && pA1[ret.first] > pA2[ret.first])
+			std::swap(ret.first,ret.second);
+		return ret;
+	}
+
 }
 
 bool CRStages::CanPullUp_(const Stage& stage) const {
@@ -126,9 +154,25 @@ bool CRStages::CompletePath(IN OUT Stage& current, IN OUT IStageQueue* pSQClosed
 			//we have found the point/Stage on the radius - lets build the path to center
 			pSQClosed->Push(current);
 			Stage rsnStage = rsn.stage, temp;
+			uint8_t aS1BoxPos[MAX_BOXES]{ 0 };
+			uint8_t aS2BoxPos[MAX_BOXES]{ 0 };
 			do {
+				rsnStage.GetBoxesPos(aS1BoxPos);
 				rsnStage = m_vClosedStages[rsnStage.nPIdx - 1]; //rsn parent
 				temp = rsnStage; temp.nPIdx = pSQClosed->Size();//1 based!
+				//to fix player / robot position of the RStage,
+				//find box in prev stage which is not in temp and place robot there
+				temp.GetBoxesPos(aS2BoxPos);
+				pair<uint8_t, uint8_t> pairBoxes = _GetDiffIndexes(aS1BoxPos, aS2BoxPos, m_Sokoban.BoxCount());
+				temp.ptR = m_Sokoban.CellPoint(aS1BoxPos[pairBoxes.first]);
+				Point ptBox = m_Sokoban.CellPoint(aS2BoxPos[pairBoxes.second]);
+				_ASSERT_RET(temp.ptR.nRow == ptBox.nRow || temp.ptR.nCol == ptBox.nCol, false);
+				_ASSERT_RET(temp.ptR.nRow != ptBox.nRow || temp.ptR.nCol != ptBox.nCol, false);
+				//fix tunnel macro-moves
+				if (temp.ptR.nCol == ptBox.nCol)
+					temp.ptR.nRow = temp.ptR.nRow > ptBox.nRow ? (ptBox.nRow + 1) : (ptBox.nRow - 1);
+				else
+					temp.ptR.nCol = temp.ptR.nCol > ptBox.nCol ? (ptBox.nCol + 1) : (ptBox.nCol - 1);
 				pSQClosed->Push(temp);
 			} while (rsnStage.nPIdx);
 			current = temp;
@@ -182,14 +226,14 @@ uint16_t CRStages::LBDist_(const RStageNode& rsnode, const Stage& stage) const {
 bool CRStages::Init(uint16_t nDepth) {
 	m_vClosedStages.clear();
 	m_vRSNodes.clear();
-	//1. BFS for reverse agent up to 2*nDepth
+	//1. BFS for reverse agent
 	Stage temp; temp.llBoxPos = m_Sokoban.FinalBoxPos();
-	deque<Stage> queueStages;//BFS
-	vector<Point> vCells;
-	uint32_t nPIdx = 1;
+	deque<Stage> queueStages; //BFS
+  vector<Point> vCells;     //reachable cells
 	//PROLOG
-	//we need to add starting Stages from all corrals/rooms of the final pos!
+	//we need to add all root Stages with correct player/robot from all corrals/rooms of the final pos!
 	bitset<MAX_DIM * MAX_DIM> btsCells; //unattended free cells
+	bool bValid = false;
 	for (uint8_t nRow = 0; nRow < m_Sokoban.Dim().nRows; ++nRow) {
 		for (uint8_t nCol = 0; nCol < m_Sokoban.Dim().nCols; ++nCol) {
 			if (btsCells.test(nRow * m_Sokoban.Dim().nCols + nCol) || m_Sokoban.NotSpace(temp, nRow, nCol))
@@ -198,14 +242,27 @@ bool CRStages::Init(uint16_t nDepth) {
 			m_Sokoban.GetReachableCells(temp, vCells);
 			for (Point ptCell : vCells) {
 				btsCells.set(ptCell.nRow * m_Sokoban.Dim().nCols + ptCell.nCol);
+				if (!bValid) {
+					temp.ptR = ptCell;
+					bValid = (CanPullUp_(temp) || CanPullLeft_(temp) || CanPullDown_(temp) || CanPullRight_(temp));
+				}
 			}
-			queueStages.push_back(temp);
+			if (bValid) {
+				queueStages.push_back(temp);
+				bValid = false;
+			}
 		}
 	}
-	Stage current = queueStages.back(); queueStages.pop_back();//or front -does not matter!
-	m_vClosedStages.push_back(current);
+  _ASSERT_RET(!queueStages.empty(),false);//unreachable final pos!
+
+	Stage current;
 	//MAIN LOOP
-	while (1) {
+	while (queueStages.size()) {
+		current = queueStages.front(); queueStages.pop_front();//BFS wants FIFO
+		if (_Depth(current, m_vClosedStages) > nDepth)
+			break;//done
+		m_vClosedStages.push_back(current);
+		uint32_t nPIdx = (uint32_t)m_vClosedStages.size();//1 based!
 		//recalc reachable cells
 		m_Sokoban.GetReachableCells(current, vCells);
 		//m_Sokoban.Display(current); //DEBUG
@@ -243,16 +300,7 @@ bool CRStages::Init(uint16_t nDepth) {
 				_CheckAddStage(temp, queueStages, m_vClosedStages, nPIdx);
 			}
 		}
-		if (queueStages.empty())
-			return false;						//could not reach the depth?
-		current = queueStages.front();
-		if (_Depth(current, m_vClosedStages) > nDepth)
-			break;//done
-		queueStages.pop_front();	//BFS wants FIFO
-		m_vClosedStages.push_back(current); //NOTE: pre-emptive closing
-		nPIdx = (uint32_t)m_vClosedStages.size();//1 based!
 	}//while
-
 	//2. Calc Corral0+Dist map for each RSNode
 	for (auto itrS = m_vClosedStages.rbegin(); itrS != m_vClosedStages.rend(); ++itrS) {
 		const Stage& stage = *itrS;

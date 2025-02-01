@@ -32,6 +32,7 @@ typedef const char* PCSTR;
 #include "SokoTypes.h"
 //#include "TimeProfiler.h"
 //common macros
+#define _ASSERT_RET(expr,retval) {if(!(expr)){_ASSERT(0); return retval;}}
 inline uint8_t _Bit1Pos(int64_t llBits) {//0 based, 0 if 0!
   uint8_t nPos = 0;
 #ifdef _WIN64
