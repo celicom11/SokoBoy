@@ -10,9 +10,9 @@ It comes that solving a Sokoban puzzle in general is a known, deeply learned and
 **Note:** the generated positions/nodes are often called **stages**.
 ## How to Build
  ### Windows/MSVC
-Just open the SokoBoy.vcxproj project and build. There is pure C++/14, STL code, no dependencies. Code uses Unicode and can be built targeting both x32/x64 arch.
+Just open the SokoBoy.vcxproj project and build. There is pure C++/17, STL code, no dependencies. Code uses Unicode and can be built targeting both x32/x64 arch.
 ### Linux/Mac
-Bad news is that there is a small static _ReadAllFiles method to read all files from the directory using wildcards/mask like "...\Dir\A*1?0.*" supported by FindFirstFile/FindNextFile Windows API. As the Boost is not used here, it is a bit of a pain implementing an identical cross-platform functionality just with the with C++/17 std::filesystem.... So, feel free to replace this function and create a gcc makefile to build it on the non-Win platforms.  
+Recently Windows specific API was removed from _ReadAllFiles method to so the code should be cross-platform ready - not tested though.
 ## How to Use
  ### Puzzles
   After building the SokoBoy, prepare or download a text file (usually with a txt/xsb/soko extension) with a **single** puzzle in correct XSB format.
@@ -28,7 +28,7 @@ Bad news is that there is a small static _ReadAllFiles method to read all files 
   - _RSM_Depth_ = 0(default/auto) or a positive number that defines **a depth of the Reverse-Pull-Tree** (aka a radius of the **Reverse Sphere**) which is used by the AStar/DFS algorithms. _RSM_Depth_ = 1 is the best for the most of the levels. For complex puzzles though it could be increased to get some reasonable number of pull/reversed stages, but the 10,000+ nodes will slow down the search.
   - _RSM_GBRelax_ = {0|1(default)|2}. Number of GoalBox removals for LBE heuristic pre-calculations. 2 is NOT yet implemented, 0 - is not recommended, but it is kept for testing reasons.
   - _DFS_MaxDepth_ = 0(default. no limit), or a positive limit/cutoff for a DFS tree depth. Should be slightly above presumed minimal/optimal number of pushes in the puzzle solution. Again, at the moment DFS is not ready to compete with BFS/A* in most cases.
-  - Rpt_Sol={1|0} - output or not the solution file. If 1 and the solution is found, the output file will be written to the puzzle's location/folder as a {puzzle_file_name}_{Search}.txt .
+  - Rpt_Sol={3|2|1|0} - how to output solution file. If solution is found, the output file with contain seriies of Levels (if 1 or 3) and/or LURD (if 2 or 3) string. The output file is written to the puzzle's location/folder as {puzzle_file_name}_{Algorithm}.txt .
   - _Rpt_SQInc_ = 0(no reporting} or positive number N (~1000 is recommended) for reporting the current node/stage and its distance(**DST**), the queued/closed nodes/stages of the search process, etc. on every moment the stages queue size has changed by N stages.
 See the details/terms in "Sokoban: Solving Techniques,..." and "Notes on Implementation" section.
  ### App's Output/Reporting
@@ -88,7 +88,9 @@ See the details/terms in "Sokoban: Solving Techniques,..." and "Notes on Impleme
 ## Puzzles directory
 Contains various puzzles/levels taken from public sources and which are used for the Sokoboy testing. Current version can quickly solve most of the levels there. 
 - Hard one, for example, is *6170_moves_more* from https://sokoban-max-moves.herokuapp.com/, but with recent performance improvements it took 1135 seconds to find 1474 pushes to solve it.
-- Unslovable: **sasquatch_iii_12.xsb** - it contains quite "unpleasand" goals configuration at the top, which require very strict order of filling. Otherwise a non-static,non-PI-Corral deadlock gets created which is not recognized by the Sokoboy. To be resolved with a "semi-fixed goals" implementation (see below).  
+- Unslovable:
+  - **sasquatch_iii_12.xsb**:  it contains quite "unpleasand" goals configuration at the top, which require very strict order of filling. Otherwise a non-static,non-PI-Corral deadlock gets created which is not recognized by the Sokoboy. To be resolved with a "semi-fixed goals" implementation (see below).
+  - **MF8_196th_Mainv5.xsb**: simplified version of the main contest level and still is too hard for the Sokoboy. To be investigated how to improve algorithms.  
 - Sub-dir **sokhard** contains a subset of the Lee J. Haywood collection https://www.sokobanonline.com/play/web-archive/lee-j-haywood/sokhard that fits Sokoboy's size/number of boxes restricitons. The most hard/time-consuming there are: 112-Catalina(1307s), 110-Antonia(447s), 109-Terra (144s), 121-Gerrilyn (138s), 120-Heulwen (134s). 112-Catalina to be investigated.
 ## How to Contribute
 As for any new/not-well-tested software, any suggestions, requests, bug findings, etc. are **VERY WELCOME**! Modifying/extending current code could be done with the standard GitHub forking/pulling [workflow](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project).
