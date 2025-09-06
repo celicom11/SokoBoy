@@ -160,10 +160,10 @@ Quite a complicated analysis of stages with boxes that are "fixed"in final/G squ
  - replace Reverse Sphere with adding a "zero-FGs" (that is "no-fixed-goals" stage) to Fixed Goals 
 
 ## Sokoban References/Links
-1. <a id="1">[Jun99]</a> Junghanns, A., *"Pushing the Limits: New Developments in Single-Agent Search."* Doctoral dissertation, University of Alberta, Edmon-
+1. <a id="1">[Jun99](https://ualberta.scholaris.ca/bitstreams/75dbd365-c034-403a-9ca3-5ab5fd360ca8/download)</a> Junghanns, A., *"Pushing the Limits: New Developments in Single-Agent Search."* Doctoral dissertation, University of Alberta, Edmon-
 ton, Alberta, Canada, 1999.
-2. <a id="2">[Virkk]</a> Timo Virkkala, *Solving Sokoban Masters Thesis*, https://sokoban.dk/wp-content/uploads/2016/02/Timo-Virkkala-Solving-Sokoban-Masters-Thesis.pdf
-3. <a id="3">[sbowiki]</a> *Sokoban Wiki*, http://sokobano.de/wiki/index.php?title=Main_Page
-4. <a id="4">[sboYass]</a> *Brian Damgaard about the YASS solver*, http://sokobano.de/wiki/index.php?title=Sokoban_solver_%22scribbles%22_by_Brian_Damgaard_about_the_YASS_solver
-5. <a id="5">[pdb]</a> Optimal Sokoban solving using pattern databases with specific domain knowledge, https://www.sciencedirect.com/science/article/pii/S0004370215000867#br0030
-6. <a id="6">[AL]</a> Hungarian impl. by Andrey Lopatin, http://e-maxx.ru/algo/assignment_hungary
+2. <a id="2">[Virkk](https://sokoban.dk/wp-content/uploads/2016/02/Timo-Virkkala-Solving-Sokoban-Masters-Thesis.pdf)</a> Timo Virkkala, *Solving Sokoban Masters Thesis*
+3. <a id="3">[sbowiki](http://sokobano.de/wiki/index.php?title=Main_Page)</a> *Sokoban Wiki*
+4. <a id="4">[sboYass](http://sokobano.de/wiki/index.php?title=Sokoban_solver_%22scribbles%22_by_Brian_Damgaard_about_the_YASS_solver)</a> *Brian Damgaard about the YASS solver*
+5. <a id="5">[pdb](https://www.sciencedirect.com/science/article/pii/S0004370215000867#br0030)</a> Optimal Sokoban solving using pattern databases with specific domain knowledge 
+6. <a id="6">[AL](http://e-maxx.ru/algo/assignment_hungary)</a> Hungarian impl. by Andrey Lopatin
